@@ -1,5 +1,9 @@
 import { Response } from 'express';
 
+(BigInt.prototype as any).toJSON = function () {
+    return this.toString();
+};
+
 export interface PaginationMeta {
     page: number;
     limit: number;

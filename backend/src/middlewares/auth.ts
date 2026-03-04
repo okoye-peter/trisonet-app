@@ -23,7 +23,7 @@ export const protect = asyncHandler(async (req: Request, res: Response, next: Ne
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as JwtPayload;
-        const currentUser = await prisma.user.findUnique({ where: { id: decoded.id } });
+        const currentUser = await prisma.user.findUnique({ where: { id: BigInt(decoded.id) } });
         if (!currentUser) {
             return next(new AppError('The user belonging to this token does no longer exist.', 401));
         }

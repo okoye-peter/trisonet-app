@@ -3,6 +3,13 @@ import { AppError } from '../utils/AppError';
 import { logger } from '../utils/logger';
 
 export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
+    // If err is a string (e.g. from a thrown string or third-party library), wrap it in an Error object
+    if (typeof err === 'string') {
+        err = new Error(err);
+        (err as any).statusCode = 500;
+        (err as any).status = 'error';
+    }
+
     err.statusCode = err.statusCode || 500;
     err.status = err.status || 'error';
 

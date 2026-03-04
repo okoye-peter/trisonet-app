@@ -1,5 +1,6 @@
+import 'dotenv/config';
+
 import express from 'express';
-import dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -9,11 +10,11 @@ import { errorHandler } from './middlewares/errorHandler';
 import { authRouter } from './routes/auth.routes';
 import { uploadRouter } from './routes/upload.routes';
 import { logRouter } from './routes/log.routes';
+import regionRouter from './routes/region.route';
+import passwordResetRouter from './routes/password_reset.routes';
 
 // Initialize background workers
 import './queue';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -37,8 +38,10 @@ app.use(morganMiddleware);
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRouter);
-app.use('/api/upload', uploadRouter);
+app.use('/api/uploads', uploadRouter);
 app.use('/api/logs', logRouter);
+app.use('/api/regions', regionRouter);
+app.use('/api/password_reset', passwordResetRouter);
 
 app.all('/{*splat}', (req, res, next) => {
     res.status(404).json({
@@ -50,6 +53,44 @@ app.all('/{*splat}', (req, res, next) => {
 
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+import { referralWorker } from './queue/workers/referral.worker';
+import { referralQueue } from './queue/referral.queue';
+import { smsWorker } from './queue/workers/sms.worker';
+import { smsQueue } from './queue/sms.queue';
+
+const server = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
+
+let isShuttingDown = false;
+
+// Graceful Shutdown
+async function shutdown() {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
+    console.log("Shutting down gracefully...");
+    try {
+        await referralWorker.close(); // Finish active jobs, stop accepting new ones
+        await referralQueue.close();  // Close the queue connection
+        await smsWorker.close();
+        await smsQueue.close();
+        console.log("Closed background workers and queues.");
+    } catch (err) {
+        console.error("Error during graceful shutdown:", err);
+    }
+
+    server.close(() => {
+        console.log("HTTP server closed.");
+        process.exit(0);
+    });
+
+    // Fallback: forcefully exit if connections hang the server.close()
+    setTimeout(() => {
+        console.error("Could not close connections in time, forcefully shutting down");
+        process.exit(1);
+    }, 5000);
+}
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);

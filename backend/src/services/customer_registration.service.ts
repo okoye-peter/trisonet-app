@@ -6,8 +6,9 @@ import { handleReferral } from "./referral.service";
 import WalletService from "./wallet.service";
 import { WalletType } from "../generated/prisma/enums";
 import { AccountActivationService } from "./account_activation.service";
+import { User } from "@prisma/client";
 
-interface User {
+interface UserRequestData {
     name: string;
     username: string;
     email: string;
@@ -18,10 +19,11 @@ interface User {
     confirm_password: string;
     referral_id: string;
     activation_code?: string;
+    picture_url?: string | null;
 }
 
-export const register = async (data: User) => {
-    const { name, username, email, phone, region_id, country, password, confirm_password, referral_id, activation_code } = data;
+export const createUser = async (data: UserRequestData) => {
+    const { name, username, email, phone, region_id, country, password, confirm_password, referral_id, activation_code, picture_url } = data;
     if (name.split(' ').length == 1) {
         throw new Error('please provide your full name');
     }
@@ -80,11 +82,54 @@ export const register = async (data: User) => {
             referralId,
             influencerId,
             influencerPromoPeriodId,
+            pictureUrl: picture_url ?? null,
         },
+        omit: {
+            withdrawalPinResetOtp: true,
+            withdrawalPinResetOtpSentAt: true,
+            emailVerificationCode: true,
+            emailVerificationCodeSentAt: true,
+            password: true,
+            passwordResetOtp: true,
+            passwordResetOtpSentAt: true,
+            referralActivateAt: true,
+            activatedAt: true,
+            lastSeen: true,
+            canWithdraw: true,
+            canUseVtu: true,
+            canEarn: true,
+            canOptOut: true,
+            canWithdrawGkwth: true,
+            sponsorshipAcceptedAt: true,
+            sponsorAgreement: true,
+            sponsorLoginOtp: true,
+            sponsorLoginOtpCreatedAt: true,
+            sponsorWithdrawalOtp: true,
+            sponsorWithdrawalOtpSentAt: true,
+            isDeactivated: true,
+            sponsorSlot: true,
+            loginYearlyCount: true,
+            schoolFeesPermittedAt: true,
+            withdrawalBypassAt: true,
+            isUnitLeader: true,
+            patronGroupId: true,
+            activationCardId: true,
+            blockedAt: true,
+        },
+        include: {
+            region: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            }
+        }
     });
 
     await WalletService.createWallets(user.id, ROLES.CUSTOMER);
     await handleAdultSponsorship(user.id, referral_id);
+
+    return user;
 }
 
 const handleAdultSponsorship = async (userId: bigint, username: string) => {
