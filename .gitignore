@@ -1,6 +1,6 @@
 # Logs
-logs
-*.log
+**/logs
+**/*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -38,7 +38,7 @@ bower_components
 build/Release
 
 # Dependency directories
-node_modules/
+**/node_modules/
 jspm_packages/
 
 # TypeScript v1 declaration files
@@ -69,18 +69,17 @@ typings/
 .yarn-integrity
 
 # dotenv environment variables file
-.env
-.env.test
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+**/.env
+**/.env.*
+!**/.env.example
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 
 # Next.js build output
-.next
+**/.next
+**/out
+**/build
 
 # Nuxt.js build / generate output
 .nuxt
@@ -105,8 +104,17 @@ dist
 .dynamodb/
 
 # OS metadata
-.DS_Store
-Thumbs.db
+**/.DS_Store
+**/Thumbs.db
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.project
+.classpath
+.settings/
 
 # Any generated prisma files
 /src/generated/prisma
@@ -114,6 +122,6 @@ Thumbs.db
 backend/src/generated/prisma
 
 # Other common ignore patterns
-dist/
-build/
-out/
+**/dist/
+**/build/
+**/out/
