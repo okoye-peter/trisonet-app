@@ -8,13 +8,13 @@ import { sendSuccess } from '../utils/responseWrapper';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const logDir = path.join(__dirname, '../../logs');
 
-export const getLogs = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+const readLogs = (res: Response, prefix: string) => {
     if (!fs.existsSync(logDir)) {
         return sendSuccess(res, 200, 'Logs retrieved successfully', { logs: [] });
     }
 
     const files = fs.readdirSync(logDir);
-    const logFiles = files.filter(f => f.endsWith('.log'));
+    const logFiles = files.filter(f => f.startsWith(prefix) && f.endsWith('.log'));
 
     if (logFiles.length === 0) {
         return sendSuccess(res, 200, 'Logs retrieved successfully', { logs: [] });
@@ -28,6 +28,14 @@ export const getLogs = asyncHandler(async (req: Request, res: Response, next: Ne
         filename: latestLog,
         content: logContent.split('\n').filter(line => line.trim() !== '')
     });
+};
+
+export const getLogs = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    readLogs(res, 'application-');
+});
+
+export const getPagaLogs = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    readLogs(res, 'paga-');
 });
 
 export const clearLogs = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {

@@ -16,21 +16,9 @@ export const register = asyncHandler(async (req: Request, res: Response, next: N
         return next(new AppError('Email already in use', 400));
     }
 
-    const user = await createUser(userData)
+    await createUser(userData)
 
-    const accessToken = signAccessToken(user.id.toString());
-    const refreshToken = signRefreshToken(user.id.toString());
-
-    await prisma.user.update({
-        where: { id: user.id },
-        data: { refreshToken },
-    });
-
-    sendSuccess(res, 201, 'User registered successfully', {
-        user,
-        accessToken,
-        refreshToken,
-    });
+    sendSuccess(res, 201, 'User registered successfully');
 });
 
 export const login = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {

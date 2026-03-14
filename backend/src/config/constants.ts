@@ -109,9 +109,21 @@ export const MAX_PATRONS_PER_GROUP = 10;
 
 export const INFANT_FORM_FEE = 30000;
 
+export const MAX_ASSET_DEPOT = 36;
+
 export const COMPANY_DETAILS = {
     NAME: 'Trisonet',
     EMAIL: 'info@trisonet.com',
     PHONE_NUMBER: '+2349078168453',
+} as const;
+
+export const PAGA = {
+    USERNAME: process.env.PAGA_USERNAME,
+    SECRET_KEY: process.env.PAGA_SECRET_KEY,
+    HMAC_KEY: process.env.PAGA_HMAC_KEY,
+    BASE_URL: process.env.PAGA_BASE_URL,
+    TEST_MODE: process.env.PAGA_TEST_MODE === 'true',
+    BUSINESS_PUBLIC_ID: process.env.PAGA_BUSINESS_PUBLIC_ID,
+    BUSINESS_PASSWORD: process.env.PAGA_BUSINESS_PASSWORD,
 } as const;
 

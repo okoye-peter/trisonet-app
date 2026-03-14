@@ -32,9 +32,9 @@ export const sendCustomerPasswordResetOtp = asyncHandler(async (req: Request, re
     if (!phoneNumber) {
         return next(new AppError(`no valid phone number to send authentication reset verification code to`, 404));
     }
-    // if (process.env.NODE_ENV == 'production') {
+    if (process.env.NODE_ENV == 'production') {
         await addSmsJob(phoneNumber, `Your password reset OTP is ${otp}`);
-    // }
+    }
 
     await prisma.user.update({
         where: { id: user.id },

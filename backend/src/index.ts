@@ -12,6 +12,9 @@ import { uploadRouter } from './routes/upload.routes';
 import { logRouter } from './routes/log.routes';
 import regionRouter from './routes/region.route';
 import passwordResetRouter from './routes/password_reset.routes';
+import userRouter from './routes/user.route';
+import vtuRouter from './routes/vtu.routes';
+import bankRouter from './routes/bank.route';
 
 // Initialize background workers
 import './queue';
@@ -20,13 +23,32 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ─── Security Middlewares ─────────────────────────────────────────────────────
-app.use(helmet()); // Sets secure HTTP headers
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: false, // Disable CSP in dev for easier testing
+}));
 
 app.use(cors({
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || '*', // e.g. "http://localhost:5173,https://myapp.com"
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true, // Allow cookies/auth headers
+    origin: (origin, callback) => {
+        const rawOrigins = process.env.ALLOWED_ORIGINS || '';
+        const allowedLinks = rawOrigins
+            .split(',')
+            .map(link => link.replace(/['"]/g, '').trim()) // Remove any extra quotes
+            .filter(Boolean);
+
+        console.log(`[CORS] Incoming origin: ${origin}`);
+        console.log(`[CORS] Allowed origins:`, allowedLinks);
+
+        if (!origin || allowedLinks.includes(origin) || allowedLinks.includes('*')) {
+            callback(null, true);
+        } else {
+            console.warn(`[CORS] Blocker origin: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: true,
 }));
 
 app.use(express.json());
@@ -36,12 +58,20 @@ app.use(cookieParser());
 // ─── Logging ──────────────────────────────────────────────────────────────────
 app.use(morganMiddleware);
 
+// ─── Health Check ─────────────────────────────────────────────────────────────
+app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'success', message: 'Backend is running' });
+});
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRouter);
 app.use('/api/uploads', uploadRouter);
 app.use('/api/logs', logRouter);
 app.use('/api/regions', regionRouter);
 app.use('/api/password_reset', passwordResetRouter);
+app.use('/api/users', userRouter);
+app.use('/api/banks', bankRouter);
+app.use('/api/vtu', vtuRouter);
 
 app.all('/{*splat}', (req, res, next) => {
     res.status(404).json({

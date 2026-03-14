@@ -36,12 +36,34 @@ export const logger = winston.createLogger({
     ]
 });
 
+export const pagaLogger = winston.createLogger({
+    level: 'info',
+    format: winston.format.combine(
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        winston.format.errors({ stack: true }),
+        winston.format.splat(),
+        customFormat
+    ),
+    transports: [
+        new winston.transports.DailyRotateFile({
+            dirname: logDir,
+            filename: 'paga-%DATE%.log',
+            datePattern: 'YYYY-MM-DD',
+            zippedArchive: true,
+            maxSize: '20m',
+            maxFiles: '30d'
+        })
+    ]
+});
+
 // If we're not in production then log to the `console` as well
 if (process.env.NODE_ENV !== 'production') {
-    logger.add(new winston.transports.Console({
+    const consoleTransport = new winston.transports.Console({
         format: winston.format.combine(
             winston.format.colorize(),
             winston.format.simple()
         )
-    }));
+    });
+    logger.add(consoleTransport);
+    pagaLogger.add(consoleTransport);
 }

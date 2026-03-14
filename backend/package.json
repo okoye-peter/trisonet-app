@@ -20,6 +20,7 @@
     "type": "module",
     "dependencies": {
         "@prisma/client": "^6.19.2",
+        "axios": "^1.13.6",
         "bcryptjs": "^3.0.3",
         "bullmq": "^5.70.1",
         "cloudinary": "^1.41.3",

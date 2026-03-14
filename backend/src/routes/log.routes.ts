@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getLogs, clearLogs } from '../controllers/log.controller';
+import { getLogs, getPagaLogs, clearLogs } from '../controllers/log.controller';
 import { protect } from '../middlewares/auth';
 
 const router = Router();
@@ -9,6 +9,7 @@ const router = Router();
 router.use(protect);
 
 router.get('/', getLogs);
+router.get('/paga', getPagaLogs);
 router.delete('/', clearLogs);
 
 export const logRouter = router;

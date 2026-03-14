@@ -25,7 +25,7 @@ interface UserRequestData {
 export const createUser = async (data: UserRequestData) => {
     const { name, username, email, phone, region_id, country, password, confirm_password, referral_id, activation_code, picture_url } = data;
     if (name.split(' ').length == 1) {
-        throw new Error('please provide your full name');
+        throw new Error('Please provide your full name');
     }
 
     // Run all independent checks in parallel
