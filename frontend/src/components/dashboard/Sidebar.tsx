@@ -28,9 +28,9 @@ import { useState, useEffect } from 'react';
 const sidebarItems = [
     { icon: LayoutGrid, label: 'Dashboard', href: '/dashboard' },
     { icon: Mail, label: 'Inbox', href: '/dashboard/inbox', badge: 0 },
-    { icon: Trophy, label: 'Winning Range', href: '/dashboard/winning-range' },
+    { icon: Trophy, label: 'Winning Range', href: '/competitions/stats' },
     { icon: User, label: 'Profile', href: '/profile' },
-    { icon: CreditCard, label: 'PIM Credit Cards', href: '/dashboard/cards' },
+    { icon: CreditCard, label: 'PIM Credit Cards', href: '/activation-cards' },
     { icon: Users, label: 'Wards', href: '/dashboard/wards' },
     { icon: CircleDollarSign, label: 'Wards Fees', href: '/dashboard/fees' },
     {

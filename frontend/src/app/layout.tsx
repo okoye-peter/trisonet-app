@@ -1,13 +1,7 @@
 import type { Metadata } from "next";
-import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import Providers from "@/providers/Providers";
 import { Toaster } from "@/components/ui/sonner"
-
-const dmSans = DM_Sans({
-    subsets: ["latin"],
-    variable: "--font-dm-sans",
-});
 
 export const metadata: Metadata = {
     title: "Create Next App",
@@ -21,7 +15,12 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body className={`${dmSans.variable} antialiased`}>
+            <head>
+                <link rel="preconnect" href="https://fonts.googleapis.com" />
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+                <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet" />
+            </head>
+            <body className="antialiased" style={{ fontFamily: "'Roboto', sans-serif" }}>
                 <Providers>
                     {children}
                 </Providers>

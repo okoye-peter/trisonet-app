@@ -127,3 +127,10 @@ export const PAGA = {
     BUSINESS_PASSWORD: process.env.PAGA_BUSINESS_PASSWORD,
 } as const;
 
+export const ACTIVATION_CARD_STATUSES = {
+    PENDING: 0,
+    APPROVED: 1,
+    CANCELLED: 2,
+    
+} as const
+

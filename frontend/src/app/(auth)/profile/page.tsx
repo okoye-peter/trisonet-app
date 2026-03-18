@@ -150,6 +150,7 @@ function BankTab({ user }: BankTabProps) {
     });
 
     const [sendOtp, { isLoading: isSendingOtp }] = useSendOtpMutation();
+    const isUpdating = false; // Placeholder for bank update mutation loading state
 
 
     const { data: banks, isLoading } = useQuery<Bank[]>({

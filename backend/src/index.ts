@@ -15,6 +15,7 @@ import passwordResetRouter from './routes/password_reset.routes';
 import userRouter from './routes/user.route';
 import vtuRouter from './routes/vtu.routes';
 import bankRouter from './routes/bank.route';
+import pimCardRouter from './routes/pim_card.route';
 
 // Initialize background workers
 import './queue';
@@ -72,6 +73,7 @@ app.use('/api/password_reset', passwordResetRouter);
 app.use('/api/users', userRouter);
 app.use('/api/banks', bankRouter);
 app.use('/api/vtu', vtuRouter);
+app.use('/api/pim_cards', pimCardRouter);
 
 app.all('/{*splat}', (req, res, next) => {
     res.status(404).json({

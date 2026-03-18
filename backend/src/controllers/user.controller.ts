@@ -172,5 +172,4 @@ export const updatePassword = asyncHandler(async (req: Request, res: Response, n
         }
     });
     sendSuccess(res, 200, 'User password updated successfully');
-})  
-    
+})

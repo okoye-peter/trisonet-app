@@ -564,7 +564,7 @@ export class PagaService {
     /**
      * Generate SHA-512 Hash
      */
-    private generateHash(params: string[]): string {
+    generateHash(params: string[]): string {
         const stringToHash = params
             .filter(param => param !== null && param !== '')
             .join('') + this.hashKey;
