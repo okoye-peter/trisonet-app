@@ -1,6 +1,7 @@
 import { prisma } from "../config/prisma";
 import { ROLES } from "../config/constants";
 import { WalletType } from "../generated/prisma/enums";
+import bcrypt from "bcryptjs";
 
 class WalletService {
     static async createWallets(userId: bigint, role: number) {
@@ -46,7 +47,7 @@ class WalletService {
                 throw new Error('Please go to your profile and set your transaction pin first');
             }
 
-            const isPinValid = await (require('bcryptjs')).compare(pin, sender.withdrawalPin);
+            const isPinValid = await bcrypt.compare(pin, sender.withdrawalPin);
             if (!isPinValid) {
                 throw new Error('Wrong transaction pin');
             }
@@ -85,7 +86,7 @@ class WalletService {
 
             // 4. Find Receiver Wallet (MUST MATCH SENDER TYPE)
             let receiverWallet = receiver.wallets.find(w => w.type === senderWallet.type);
-            
+
             if (!receiverWallet) {
                 throw new Error('Invalid receiver wallet type');
             }
