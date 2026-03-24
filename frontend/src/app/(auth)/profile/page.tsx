@@ -1,23 +1,27 @@
 'use client';
 
 import { motion, AnimatePresence, Variants } from 'framer-motion';
-import { User, Mail, Shield, Award, Landmark, Lock, Phone, ShieldUser, LockKeyholeOpen, Loader2 } from 'lucide-react';
+import { User, Mail, Shield, Award, Landmark, Phone, ShieldUser, LockKeyholeOpen, Loader2, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAppSelector } from '@/store/hooks';
-import type { Bank, BankAccountDetail, User as UserType } from '@/types';
+import type { BankAccountDetail, User as UserType } from '@/types';
 import { toast } from "sonner"
-import { useUpdateProfileMutation, useUpdatePasswordMutation, useSendOtpMutation } from '@/store/api/userApi'
+import {
+    useUpdateProfileMutation,
+    useUpdateBankDetailsMutation,
+} from '@/store/api/userApi'
+import { useGetBanksQuery, useResolveAccountMutation } from '@/store/api/bankApi';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/axios';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 
-type TabType = 'personal' | 'bank' | 'password';
+type TabType = 'personal' | 'bank';
 
 interface PersonalInfoTabProps {
     user: UserType | null;
@@ -143,30 +147,47 @@ function BankTab({ user }: BankTabProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [bankData, setBankData] = useState({
         bank: user?.bank ?? '',
+        bankUUID: '',
         accountNumber: user?.accountNumber ?? '',
         accountName: user?.name ?? '',
-        otp: '',
-        currentPassword: ''
+        currentPassword: '',
     });
 
-    const [sendOtp, { isLoading: isSendingOtp }] = useSendOtpMutation();
-    const isUpdating = false; // Placeholder for bank update mutation loading state
+    const [resolveAccount, { isLoading: isResolving }] = useResolveAccountMutation();
+    const [updateBankDetails, { isLoading: isUpdating }] = useUpdateBankDetailsMutation();
 
-
-    const { data: banks, isLoading } = useQuery<Bank[]>({
-        queryKey: ['banks'],
-        queryFn: () => api.get('/api/banks').then((res) => res.data?.data?.banks)
-    })
+    const { data: banksResponse, isLoading: isBanksLoading } = useGetBanksQuery();
+    const banks = banksResponse?.data || [];
 
     const { data: bankDetails, isLoading: isBankDetailsLoading } = useQuery<BankAccountDetail>({
         queryKey: ['user'],
-        queryFn: () => api.get('/api/users/me').then((res) => res.data?.data?.user),
-        enabled: !!user?.bank && !!user?.accountNumber && !isLoading && !!banks && banks.length > 0
+        queryFn: () => api.get('/users/me').then((res) => res.data?.data?.user),
+        enabled: !!user?.bank && !!user?.accountNumber && !isBanksLoading && banks.length > 0
     })
 
-    if (isLoading || isBankDetailsLoading) {
-        return <div className="flex items-center justify-center h-full">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+    const handleResolveAccount = useCallback(async (accountNumber?: string, bankUUID?: string) => {
+        const acc = accountNumber ?? bankData.accountNumber;
+        const bnk = bankUUID ?? bankData.bankUUID;
+
+        if (acc.length >= 10 && bnk) {
+            try {
+                const res = await resolveAccount({
+                    bankUUID: bnk,
+                    accountNumber: acc
+                }).unwrap();
+                if (res?.data) {
+                    const resolvedData = res.data as BankAccountDetail;
+                    setBankData(prev => ({ ...prev, accountName: resolvedData.accountName }));
+                }
+            } catch {
+                setBankData(prev => ({ ...prev, accountName: '' }));
+            }
+        }
+    }, [bankData.accountNumber, bankData.bankUUID, resolveAccount]);
+
+    if (isBanksLoading || isBankDetailsLoading) {
+        return <div className="flex items-center justify-center p-20">
+            <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
         </div>
     }
 
@@ -178,137 +199,210 @@ function BankTab({ user }: BankTabProps) {
             return;
         }
 
+        if (!bankData.currentPassword) {
+            toast.error("Validation failed", {
+                description: "Password is required to update bank details",
+            });
+            return;
+        }
+
         try {
+            const updateData = {
+                bank: bankData.bank,
+                accountNumber: bankData.accountNumber,
+                currentPassword: bankData.currentPassword,
+            };
+
+            await updateBankDetails(updateData).unwrap();
+
             toast.success("Bank details updated successfully");
             setIsEditing(false);
-            setBankData(prev => ({ ...prev, otp: '', currentPassword: '' }));
-        } catch (error: any) {
+            setBankData(prev => ({ ...prev, otp: '' }));
+        } catch (error: unknown) {
+            const rtkError = error as { data?: { message?: string } };
             toast.error("Update failed", {
-                description: error?.data?.message || "Could not update bank details",
+                description: rtkError?.data?.message || "Could not update bank details",
             });
         }
     };
 
-    const handleSendOtp = async () => {
-        try {
-            await sendOtp().unwrap();
-            toast.success("OTP sent successfully", {
-                description: "Checks your email for the 6-digit verification code",
-            });
-        } catch {
-            toast.error("Failed to send OTP", {
-                description: "Please try again later",
-            });
-        }
-    };
 
-    if (user?.bank && user?.accountNumber && !isEditing) {
+    if (user?.bank && user?.accountNumber) {
         return (
-            <div className="space-y-8">
-                <div className="p-8 rounded-[2rem] bg-linear-to-br from-zinc-900 to-zinc-800 text-white shadow-2xl shadow-zinc-200 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-8 opacity-10 transition-transform group-hover:scale-110 duration-500">
-                        <Landmark size={120} />
-                    </div>
-                    <div className="relative z-10 space-y-6">
-                        <div>
-                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-1">Current Bank</p>
-                            <h3 className="text-2xl font-black">{user.bank}</h3>
+            <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-8"
+            >
+                <div className="relative group perspective-1000">
+                    <motion.div 
+                        whileHover={{ rotateY: 5, rotateX: -5, scale: 1.02 }}
+                        className="p-10 rounded-[2.5rem] bg-linear-to-br from-zinc-900 via-zinc-800 to-black text-white shadow-2xl shadow-indigo-500/10 relative overflow-hidden transition-all duration-500"
+                    >
+                        {/* Decorative Elements */}
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -mr-32 -mt-32" />
+                        <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl -ml-24 -mb-24" />
+                        
+                        <div className="absolute top-8 right-8 opacity-20 transition-transform group-hover:scale-110 group-hover:rotate-12 duration-700">
+                            <Landmark size={80} strokeWidth={1.5} />
                         </div>
-                        <div className="flex justify-between items-end">
-                            <div>
-                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-1">Account Number</p>
-                                <p className="text-xl font-mono font-bold tracking-widest">
-                                    {user.accountNumber.replace(/(\d{3})(\d{4})(\d{3})/, '$1 **** $3')}
-                                </p>
+
+                        <div className="relative z-10 space-y-10">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500 mb-2">Connected Bank</p>
+                                    <h3 className="text-3xl font-black tracking-tight bg-linear-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+                                        {user.bank}
+                                    </h3>
+                                </div>
+                                <div className="h-12 w-16 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 backdrop-blur-sm">
+                                    <div className="w-8 h-8 rounded-full bg-linear-to-br from-indigo-500 to-purple-500 opacity-50" />
+                                </div>
                             </div>
-                            <div className="text-right">
-                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-1">Account Name</p>
-                                <p className="font-bold text-sm uppercase">{bankDetails?.accountName ?? '...'}</p>
+
+                            <div className="space-y-6">
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500 mb-2">Account Number</p>
+                                    <div className="flex items-center gap-4">
+                                        <p className="text-3xl font-mono font-bold tracking-[0.2em]">
+                                            {user.accountNumber.replace(/(\d{3})(\d{4})(\d{3})/, '**** **** $3')}
+                                        </p>
+                                        <div className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
+                                            <p className="text-[8px] font-black uppercase tracking-widest text-emerald-500 flex items-center gap-1">
+                                                <CheckCircle2 size={10} /> Active
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="pt-6 border-t border-white/5 flex justify-between items-center">
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500 mb-1">Account Holder</p>
+                                        <p className="font-bold text-lg tracking-wide uppercase text-zinc-200">
+                                            {bankDetails?.accountName || user.name}
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500 mb-1">Status</p>
+                                        <p className="font-black text-xs uppercase tracking-widest text-indigo-400">Verified Account</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </motion.div>
                 </div>
 
-                <div className="flex gap-4">
-                    <Button
-                        onClick={() => setIsEditing(true)}
-                        className="h-14 px-8 rounded-2xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-black uppercase tracking-widest text-xs transition-all active:scale-95"
+                <div className="flex flex-col gap-4">
+                    <motion.div 
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="p-6 rounded-[1.5rem] bg-indigo-50/50 border border-indigo-100/50 flex items-start gap-4 backdrop-blur-sm"
                     >
-                        Reset Bank Details
+                        <Shield className="text-indigo-600 mt-1 shrink-0" size={18} />
+                        <div>
+                            <p className="text-xs font-black uppercase tracking-widest text-indigo-900 mb-1.5">Security Protocol</p>
+                            <p className="text-xs text-indigo-700 font-medium leading-relaxed">
+                                For your protection, bank details are encrypted and locked once verified. 
+                                Changes require official documentation and support verification.
+                            </p>
+                        </div>
+                    </motion.div>
+                    
+                    <Button 
+                        variant="ghost" 
+                        disabled
+                        className="h-10 text-[10px] font-black uppercase tracking-widest text-zinc-400"
+                    >
+                        To update details, please contact trisonet support
                     </Button>
                 </div>
-            </div>
+            </motion.div>
         );
     }
 
     return (
         <div className="space-y-8">
             <div className="grid gap-6 sm:grid-cols-2">
-                <div className="space-y-2.5 sm:col-span-2">
+                <div className="space-y-2.5">
                     <Label className="text-xs font-black uppercase tracking-widest text-zinc-400">Bank Name</Label>
-                    <Select
-                        items={banks?.map((bank) => ({ label: bank.name, value: bank.name })) ?? []}
-                        value={bankData.bank}
-                        onValueChange={(val) => setBankData(prev => ({ ...prev, bank: val ?? '' }))}
-                    >
-                        <SelectTrigger className="w-full h-14 px-6 rounded-[1.2rem] bg-zinc-50 border-zinc-100 font-bold text-zinc-900">
-                            <SelectValue placeholder="Select your bank" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {banks?.map((bank) => (
-                                <SelectItem key={bank.uuid} value={bank.name}>
-                                    {bank.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                        items={banks?.map((bank) => ({ label: bank.name, value: bank.uuid })) ?? []}
+                        value={bankData.bankUUID}
+                        onValueChange={(val) => {
+                            const bank = banks.find(b => b.uuid === val);
+                            setBankData(prev => ({
+                                ...prev,
+                                bankUUID: val ?? '',
+                                bank: bank?.name ?? '',
+                                accountName: ''
+                            }));
+                            if (bankData.accountNumber.length === 10 && val) {
+                                handleResolveAccount(bankData.accountNumber, val);
+                            }
+                        }}
+                        placeholder="Select your bank"
+                        triggerClassName="w-full h-14 px-6 rounded-[1.2rem] bg-zinc-50 border-zinc-100 font-bold text-zinc-900"
+                    />
                 </div>
                 <div className="space-y-2.5">
                     <Label className="text-xs font-black uppercase tracking-widest text-zinc-400">Account Number</Label>
-                    <Input
-                        className="h-14 px-6 rounded-[1.2rem] bg-zinc-50 border-zinc-100 font-bold text-zinc-900"
-                        placeholder="0000000000"
-                        value={bankData.accountNumber}
-                        onChange={(e) => setBankData(prev => ({ ...prev, accountNumber: e.target.value }))}
-                    />
+                    <div className="relative">
+                        <Input
+                            className="h-14 px-6 rounded-[1.2rem] bg-zinc-50 border-zinc-100 font-bold text-zinc-900"
+                            placeholder="0000000000"
+                            value={bankData.accountNumber}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                setBankData(prev => ({ ...prev, accountNumber: val }));
+                                if (val.length === 10 && bankData.bankUUID) {
+                                    handleResolveAccount(val, bankData.bankUUID);
+                                } else if (val.length < 10) {
+                                    setBankData(prev => ({ ...prev, accountName: '' }));
+                                }
+                            }}
+                        />
+                        {isResolving && <Loader2 size={18} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-zinc-400" />}
+                    </div>
                 </div>
                 <div className="space-y-2.5">
                     <Label className="text-xs font-black uppercase tracking-widest text-zinc-400">Account Name</Label>
-                    <Input
-                        className="h-14 px-6 rounded-[1.2rem] bg-zinc-50 border-zinc-100 font-bold text-zinc-900"
-                        value={bankData.accountName}
-                        disabled
-                    />
+                    <div className="relative">
+                        <Input
+                            className={cn(
+                                "h-14 px-6 rounded-[1.2rem] border-none font-bold transition-all duration-300",
+                                bankData.accountName
+                                    ? "bg-emerald-50 text-emerald-600"
+                                    : "bg-zinc-50 text-zinc-400"
+                            )}
+                            value={bankData.accountName}
+                            placeholder={isResolving ? "Resolving..." : "Validated Account Name"}
+                            disabled
+                        />
+                        <AnimatePresence>
+                            {bankData.accountName && !isResolving && (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.5 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.5 }}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500"
+                                >
+                                    <CheckCircle2 size={20} />
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </div>
                 <div className="space-y-2.5">
                     <Label className="text-xs font-black uppercase tracking-widest text-zinc-400">Current Password</Label>
-                    <Input
-                        type="password"
-                        className="h-14 px-6 rounded-[1.2rem] bg-zinc-50 border-zinc-100 font-bold text-zinc-900"
-                        placeholder="••••••••"
-                        value={bankData.currentPassword}
-                        onChange={(e) => setBankData(prev => ({ ...prev, currentPassword: e.target.value }))}
-                    />
-                </div>
-                <div className="space-y-2.5">
-                    <Label className="text-xs font-black uppercase tracking-widest text-zinc-400">Verification Code (OTP)</Label>
-                    <div className="flex gap-2">
+                    <div className="relative">
                         <Input
+                            type="password"
                             className="h-14 px-6 rounded-[1.2rem] bg-zinc-50 border-zinc-100 font-bold text-zinc-900"
-                            placeholder="123456"
-                            maxLength={6}
-                            value={bankData.otp}
-                            onChange={(e) => setBankData(prev => ({ ...prev, otp: e.target.value }))}
+                            value={bankData.currentPassword}
+                            placeholder="Enter your current password"
+                            onChange={(e) => setBankData(prev => ({ ...prev, currentPassword: e.target.value }))}
                         />
-                        <Button 
-                            type="button"
-                            variant="outline"
-                            className="h-14 px-6 rounded-[1.2rem] border-zinc-100 font-black uppercase tracking-widest text-[10px] whitespace-nowrap"
-                            onClick={handleSendOtp}
-                            disabled={isSendingOtp}
-                        >
-                            {isSendingOtp ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send OTP'}
-                        </Button>
                     </div>
                 </div>
             </div>
@@ -334,93 +428,7 @@ function BankTab({ user }: BankTabProps) {
     );
 }
 
-function PasswordTab() {
-    const [passwordData, setPasswordData] = useState({
-        currentPassword: '',
-        password: '',
-        confirmPassword: ''
-    })
 
-    const [updatePassword, { isLoading: isPending }] = useUpdatePasswordMutation();
-
-    const handleUpdate = async () => {
-        if (!passwordData.currentPassword || !passwordData.password || !passwordData.confirmPassword) {
-            toast.error("Validation failed", {
-                description: "All fields are required",
-            });
-            return;
-        }
-
-        if (passwordData.password !== passwordData.confirmPassword) {
-            toast.error("Validation failed", {
-                description: "Passwords do not match",
-            });
-            return;
-        }
-
-        try {
-            await updatePassword(passwordData).unwrap();
-            toast.success("Password updated successfully");
-            setPasswordData({
-                currentPassword: '',
-                password: '',
-                confirmPassword: ''
-            });
-        } catch (error: unknown) {
-            console.error(error);
-            let errorMessage = "Password update failed";
-
-            const rtkError = error as { data?: { message?: string } };
-            if (rtkError?.data?.message) {
-                errorMessage = rtkError.data.message;
-            }
-            toast.error("Password update failed", {
-                description: errorMessage,
-            });
-        }
-    }
-
-    return (
-        <div className="space-y-8">
-            <div className="space-y-6">
-                <div className="space-y-2.5">
-                    <Label className="text-xs font-black uppercase tracking-widest text-zinc-400">Current Password</Label>
-                    <Input
-                        type="password"
-                        className="h-14 px-6 rounded-[1.2rem] bg-zinc-50 border-zinc-100 font-bold text-zinc-900"
-                        value={passwordData.currentPassword}
-                        onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
-                    />
-                </div>
-                <div className="space-y-2.5">
-                    <Label className="text-xs font-black uppercase tracking-widest text-zinc-400">New Password</Label>
-                    <Input
-                        type="password"
-                        className="h-14 px-6 rounded-[1.2rem] bg-zinc-50 border-zinc-100 font-bold text-zinc-900"
-                        value={passwordData.password}
-                        onChange={(e) => setPasswordData(prev => ({ ...prev, password: e.target.value }))}
-                    />
-                </div>
-                <div className="space-y-2.5">
-                    <Label className="text-xs font-black uppercase tracking-widest text-zinc-400">Confirm New Password</Label>
-                    <Input
-                        type="password"
-                        className="h-14 px-6 rounded-[1.2rem] bg-zinc-50 border-zinc-100 font-bold text-zinc-900"
-                        value={passwordData.confirmPassword}
-                        onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                    />
-                </div>
-            </div>
-            <Button
-                className="h-14 px-8 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-white font-black uppercase tracking-widest text-xs shadow-xl shadow-zinc-200 transition-all active:scale-95"
-                onClick={handleUpdate}
-                disabled={isPending}
-            >
-                {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Update Security'}
-            </Button>
-        </div>
-    );
-}
 
 
 
@@ -443,13 +451,12 @@ export default function ProfilePage() {
 
     const itemVariants: Variants = {
         hidden: { opacity: 0, y: 20 },
-        show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] as any } }
+        show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } }
     };
 
     const tabs = [
         { id: 'personal', label: 'Personal Info', icon: User },
         { id: 'bank', label: 'Bank', icon: Landmark },
-        { id: 'password', label: 'Password', icon: Lock },
     ];
 
     return (
@@ -472,12 +479,12 @@ export default function ProfilePage() {
                         <div className="h-32 bg-linear-to-br from-indigo-600 to-purple-600" />
                         <CardContent className="relative pt-0 text-center pb-8 px-8">
                             <div className="absolute left-1/2 -top-12 -translate-x-1/2">
-                                <div className="h-24 w-24 rounded-full border-4 border-white bg-linear-to-br from-indigo-500 to-purple-500 flex items-center justify-center font-black text-3xl text-white shadow-xl">
+                                <div className="h-24 w-24 rounded-full border-4 border-white bg-linear-to-br from-indigo-500 to-purple-500 flex items-center justify-center font-black text-3xl text-white shadow-xl capitalize">
                                     {user?.name?.[0] || 'U'}
                                 </div>
                             </div>
                             <div className="mt-16">
-                                <h2 className="text-xl font-black text-zinc-900 leading-tight">{user?.name || 'User Name'}</h2>
+                                <h2 className="text-xl font-black text-zinc-900 leading-tight capitalize">{user?.name || 'User Name'}</h2>
                                 <p className="text-sm text-zinc-400 font-bold uppercase tracking-wider mt-1">Member Since 2024</p>
                                 <div className="mt-4 flex justify-center gap-2">
                                     <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-indigo-700 ring-1 ring-inset ring-indigo-600/10">
@@ -544,8 +551,6 @@ export default function ProfilePage() {
 
 
                                     {activeTab === 'bank' && <BankTab user={user} key={user?.id ?? 'loading-bank'} />}
-
-                                    {activeTab === 'password' && <PasswordTab />}
 
                                 </CardContent>
                             </Card>

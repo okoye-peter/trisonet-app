@@ -3,12 +3,18 @@
 import { 
     TrendingUp, 
     ArrowRightLeft,
-    DollarSign,
     ShieldCheck,
     RefreshCcw,
+    Loader2,
+    Plus,
+    Clock,
+    CheckCircle,
+    CheckCircle2,
     AlertCircle,
-    Activity,
-    Info
+    MessageCircle,
+    Lock,
+    Copy,
+    ArrowUpRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,7 +22,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useGetWalletsQuery, useGetGkwthPricesQuery, usePurchaseGkwthMutation, useRequestAssetLoanMutation, useGetAssetLoansQuery } from '@/store/api/walletApi';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { useGetWalletsQuery, useGetGkwthPricesQuery, usePurchaseGkwthMutation, useLazyCheckFundingStatusQuery, walletApi } from '@/store/api/walletApi';
 import { useGetBanksQuery, useResolveAccountMutation } from '@/store/api/bankApi';
 import { useInitiateWithdrawalMutation } from '@/store/api/withdrawalApi';
 import {
@@ -26,49 +33,45 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Copy, Clock, CheckCircle2 } from 'lucide-react';
 import LoadingScreen from '@/components/LoadingScreen';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { TransferModal } from '@/components/wallets/TransferModal';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '@/store/store';
 import { toast } from 'sonner';
 
-type TabType = 'overview' | 'fund' | 'sell' | 'loan';
+type TabType = 'overview' | 'fund' | 'sell';
+
+const NairaIcon = ({ size = 24, className }: { size?: number, className?: string }) => (
+    <span className={cn("font-bold flex items-center justify-center", className)} style={{ fontSize: size }}>₦</span>
+);
 
 export default function GkwthWalletPage() {
+    const router = useRouter();
+    const dispatch = useDispatch();
     const user = useSelector((state: RootState) => state.auth.user);
-    const { data: walletsResponse, isLoading: isWalletsLoading } = useGetWalletsQuery();
+    const { data: walletsResponse, isLoading: isWalletsLoading, refetch: refetchWallets } = useGetWalletsQuery();
     const { data: pricesResponse } = useGetGkwthPricesQuery();
     const { data: banksResponse } = useGetBanksQuery();
     const [resolveAccount, { isLoading: isResolving }] = useResolveAccountMutation();
     const [initiateWithdrawal, { isLoading: isWithdrawing }] = useInitiateWithdrawalMutation();
     const [purchaseGkwth, { isLoading: isPurchasing }] = usePurchaseGkwthMutation();
-    const [requestAssetLoan, { isLoading: isRequestingLoan }] = useRequestAssetLoanMutation();
-    const { data: loansResponse } = useGetAssetLoansQuery();
+    const [checkStatus] = useLazyCheckFundingStatusQuery();
     
-    // Eligibility calculation
-    const threeMonthsAgo = useState(() => {
-        const d = new Date();
-        d.setMonth(d.getMonth() - 3);
-        return d;
-    })[0];
-
     const wallets = walletsResponse?.data || [];
-    const banks = banksResponse?.data || [];
+    const banks = useMemo(() => banksResponse?.data || [], [banksResponse]);
     const indirectWallet = wallets.find(w => w.type === 'indirect');
     const prices = pricesResponse?.data;
 
-    const sellPrice = Number(prices?.gkwthSalePrice) || 5000;
-    const fundPrice = Number(prices?.gkwthPurchasePrice) || 10000;
+    const purchasePrice = Number(prices?.gkwthPurchasePrice) || 0;
+    const salePrice = Number(prices?.gkwthSalePrice) || 0;
 
     const [activeTab, setActiveTab] = useState<TabType>('overview');
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
-    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-    const [loanQuantity, setLoanQuantity] = useState('');
     const [paymentDetails, setPaymentDetails] = useState<{
         account_name: string;
         bank_name: string;
@@ -78,6 +81,13 @@ export default function GkwthWalletPage() {
         reference: string;
     } | null>(null);
 
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [showPollingModal, setShowPollingModal] = useState(false);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [showPendingModal, setShowPendingModal] = useState(false);
+    const [pollingInterval, setPollingInterval] = useState(2000);
+    const [pollingStartTime, setPollingStartTime] = useState<number | null>(null);
+
     // Form States
     const [fundQuantity, setFundQuantity] = useState('');
     const [withdrawData, setWithdrawData] = useState({
@@ -86,7 +96,8 @@ export default function GkwthWalletPage() {
         account_number: '',
         account_name: '',
         amount: '',
-        pin: ''
+        pin: '',
+        otp: ''
     });
 
     useEffect(() => {
@@ -102,28 +113,133 @@ export default function GkwthWalletPage() {
         }
     }, [user, activeTab, withdrawData.account_number]);
 
-    const handleResolveAccount = async () => {
-        if (withdrawData.account_number.length >= 10 && withdrawData.bank_code) {
+    // Check for bank details when switching to sell tab
+    useEffect(() => {
+        if (activeTab === 'sell' && user) {
+            if (!user.bank || !user.accountNumber) {
+                toast.error('Please set your bank details in your profile before withdrawing.');
+                const timer = setTimeout(() => {
+                    router.push('/profile');
+                }, 2000);
+                return () => clearTimeout(timer);
+            }
+        }
+    }, [activeTab, user, router]);
+
+    const isPrefilled = useRef(false);
+
+    // Prefill withdrawal data from user profile
+    useEffect(() => {
+        if (user && activeTab === 'sell' && user.bank && user.accountNumber && banks.length > 0 && !isPrefilled.current) {
+            const userBank = banks.find(b => b.name === user.bank);
+            if (userBank) {
+                const timer = setTimeout(() => {
+                    setWithdrawData(prev => ({
+                        ...prev,
+                        account_number: user.accountNumber || '',
+                        bank_name: user.bank || '',
+                        bank_code: userBank.uuid
+                    }));
+                }, 0);
+                isPrefilled.current = true;
+                return () => clearTimeout(timer);
+            }
+        }
+    }, [user, activeTab, banks]);
+
+    // Reset prefilled state when tab changes
+    useEffect(() => {
+        if (activeTab !== 'sell') {
+            isPrefilled.current = false;
+        }
+    }, [activeTab]);
+
+    const handleResolveAccount = useCallback(async (accountNumber?: string, bankUUID?: string) => {
+        const acc = accountNumber ?? withdrawData.account_number;
+        const bnk = bankUUID ?? withdrawData.bank_code;
+        
+        if (acc.length >= 10 && bnk) {
             try {
                 const res = await resolveAccount({
-                    bank_code: withdrawData.bank_code,
-                    account_number: withdrawData.account_number
+                    bankUUID: bnk,
+                    accountNumber: acc
                 }).unwrap();
                 if (res.data) {
                     setWithdrawData(prev => ({ ...prev, account_name: res.data!.accountName }));
-                    toast.success('Account resolved successfully');
                 }
-            } catch (err) {
-                const apiErr = err as { data?: { message?: string } };
-                toast.error(apiErr.data?.message || 'Failed to resolve account');
+            } catch {
+                setWithdrawData(prev => ({ ...prev, account_name: '' }));
             }
         }
+    }, [withdrawData.account_number, withdrawData.bank_code, resolveAccount, setWithdrawData]);
+
+    // Auto-resolve when prefilled
+    useEffect(() => {
+        const shouldResolve = 
+            withdrawData.account_number.length === 10 && 
+            withdrawData.bank_code && 
+            !withdrawData.account_name && 
+            !isResolving;
+
+        if (shouldResolve) {
+            const timer = setTimeout(() => {
+                handleResolveAccount();
+            }, 0);
+            return () => clearTimeout(timer);
+        }
+    }, [withdrawData.account_number, withdrawData.bank_code, withdrawData.account_name, handleResolveAccount, isResolving]);
+    const startPolling = () => {
+        setIsPaymentModalOpen(false);
+        setShowPollingModal(true);
+        setPollingStartTime(Date.now());
+        setPollingInterval(2000);
     };
+
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+        
+        const poll = async () => {
+            if (!showPollingModal || !paymentDetails?.reference || !pollingStartTime) return;
+
+            const timeElapsed = Date.now() - pollingStartTime;
+            const maxDuration = 90000; // 1 minute 30 seconds
+
+            if (timeElapsed >= maxDuration) {
+                setShowPollingModal(false);
+                setShowPendingModal(true);
+                return;
+            }
+
+            try {
+                const res = await checkStatus(paymentDetails.reference).unwrap();
+                if (res.data?.status === 'success') {
+                    setShowPollingModal(false);
+                    setShowSuccessModal(true);
+                    refetchWallets();
+                    dispatch(walletApi.util.invalidateTags(['Wallet']));
+                    return;
+                }
+            } catch (err) {
+                console.error('Polling error:', err);
+            }
+
+            // Exponential backoff
+            const nextInterval = Math.min(pollingInterval * 1.5, 10000);
+            setPollingInterval(nextInterval);
+            timer = setTimeout(poll, nextInterval);
+        };
+
+        if (showPollingModal) {
+            timer = setTimeout(poll, pollingInterval);
+        }
+
+        return () => clearTimeout(timer);
+    }, [showPollingModal, paymentDetails, pollingStartTime, pollingInterval, checkStatus, refetchWallets, dispatch]);
 
     const handleFund = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!fundQuantity || Number(fundQuantity) < 0.5) {
-            toast.error('Minimum purchase quantity is 0.5 GKWTH');
+        if (!fundQuantity || Number(fundQuantity) < 1) {
+            toast.error('Minimum purchase quantity is 1 GKWTH');
             return;
         }
 
@@ -142,7 +258,31 @@ export default function GkwthWalletPage() {
 
     const handleWithdraw = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!indirectWallet) return;
+        
+        if (!indirectWallet) {
+            toast.error('GKWTH Wallet not found. Please refresh and try again.');
+            return;
+        }
+
+        if (!withdrawData.amount || Number(withdrawData.amount) < 1) {
+            toast.error('Minimum withdrawal is 1 GKWTH.');
+            return;
+        }
+
+        if (user?.role === 8 && !withdrawData.otp) {
+            toast.error('Please enter your withdrawal OTP.');
+            return;
+        }
+
+        if (user?.role !== 8 && !withdrawData.pin) {
+            toast.error('Please enter your transaction PIN.');
+            return;
+        }
+
+        if (!withdrawData.account_name) {
+            toast.error('Please wait for account resolution or enter valid bank details.');
+            return;
+        }
         
         try {
             await initiateWithdrawal({
@@ -152,7 +292,10 @@ export default function GkwthWalletPage() {
                 account_name: withdrawData.account_name,
                 account_number: withdrawData.account_number,
                 wallet: indirectWallet.id!.toString(),
-                withdrawal_pin: withdrawData.pin
+                ...(user?.role === 8 
+                    ? { withdrawal_otp: withdrawData.otp } 
+                    : { withdrawal_pin: withdrawData.pin }
+                )
             }).unwrap();
             
             toast.success('Withdrawal request initiated successfully');
@@ -163,30 +306,20 @@ export default function GkwthWalletPage() {
         }
     };
 
-    const handleLoanRequest = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!loanQuantity || Number(loanQuantity) <= (indirectWallet?.amount || 0)) {
-            toast.error(`Loan quantity must be greater than your current balance (${indirectWallet?.amount || 0})`);
-            return;
-        }
-
-        try {
-            await requestAssetLoan({ quantity: Number(loanQuantity) }).unwrap();
-            toast.success('Asset loan request submitted successfully');
-            setLoanQuantity('');
-            setActiveTab('overview');
-        } catch (err) {
-            const apiErr = err as { data?: { message?: string } };
-            toast.error(apiErr.data?.message || 'Failed to submit loan request');
-        }
-    };
-
     const copyToClipboard = (text: string, label: string) => {
         navigator.clipboard.writeText(text);
         toast.success(`${label} copied to clipboard`);
     };
 
+    const handlePaymentModalOpenChange = (open: boolean) => {
+        setIsPaymentModalOpen(open);
+        if (!open) {
+            setPaymentDetails(null);
+        }
+    };
+
     if (isWalletsLoading) return <LoadingScreen />;
+
 
     return (
         <div className="min-h-screen bg-zinc-50/50">
@@ -221,7 +354,7 @@ export default function GkwthWalletPage() {
                 {/* Tab Switcher */}
                 <div className="flex justify-center">
                     <div className="inline-flex p-1.5 bg-zinc-200/50 backdrop-blur-md rounded-2xl border border-zinc-200 max-w-full overflow-x-auto no-scrollbar">
-                        {['overview', 'fund', 'sell', 'loan'].map((tab) => (
+                        {['overview', 'fund', 'sell'].map((tab) => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab as TabType)}
@@ -238,7 +371,7 @@ export default function GkwthWalletPage() {
                                     />
                                 )}
                                 <span className="relative z-10">
-                                    {tab === 'sell' ? 'Sell GKWTH' : tab === 'fund' ? 'Fund GKWTH' : tab === 'loan' ? 'Asset Loan' : 'Overview'}
+                                    {tab === 'sell' ? 'Sell GKWTH' : tab === 'fund' ? 'Fund GKWTH' : 'Overview'}
                                 </span>
                             </button>
                         ))}
@@ -313,7 +446,7 @@ export default function GkwthWalletPage() {
 
                                 <Card className="border-zinc-100 bg-white rounded-[3rem] p-10 flex flex-col justify-center items-center text-center group transition-all hover:shadow-2xl">
                                     <div className="h-20 w-20 rounded-3xl bg-emerald-50 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500">
-                                        <DollarSign className="text-emerald-600" size={40} />
+                                        <NairaIcon className="text-emerald-600" size={40} />
                                     </div>
                                     <h3 className="text-2xl font-black text-zinc-900 mb-4">Direct Wallet</h3>
                                     <p className="text-zinc-500 font-medium mb-10 max-w-[280px] italic leading-relaxed">
@@ -340,10 +473,16 @@ export default function GkwthWalletPage() {
                         >
                             <Card className="border-none bg-white rounded-[3rem] p-4 shadow-2xl ring-1 ring-zinc-100">
                                 <CardContent className="p-8 space-y-8">
-                                    <div className="space-y-1">
-                                        <h2 className="text-3xl font-black text-zinc-900">Fund GKWTH</h2>
-                                        <p className="text-lg text-zinc-400 font-bold">Unit Price: <span className="text-zinc-600">₦{fundPrice.toLocaleString()}.00</span></p>
+                                    <div className="flex items-center gap-4 mb-4">
+                                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                                            <Plus size={24} />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-2xl font-black text-zinc-900">Fund GKWTH</h2>
+                                            <p className="text-sm text-zinc-500 font-medium italic">Buy GKWTH assets instantly.</p>
+                                        </div>
                                     </div>
+                                    <p className="text-lg text-zinc-400 font-bold mb-4">Unit Price: <span className="text-zinc-600">₦{salePrice.toLocaleString()}.00</span></p>
 
                                     <form onSubmit={handleFund} className="space-y-6">
                                         <div className="space-y-2">
@@ -364,7 +503,7 @@ export default function GkwthWalletPage() {
                                             <div className="relative">
                                                 <div className="absolute left-6 top-1/2 -translate-y-1/2 text-lg font-bold text-zinc-400">₦</div>
                                                 <Input 
-                                                    value={fundQuantity ? (Number(fundQuantity) * fundPrice).toLocaleString() : '0'}
+                                                    value={fundQuantity ? (Number(fundQuantity) * salePrice).toLocaleString() : '0'}
                                                     readOnly
                                                     className="h-14 pl-12 text-xl font-bold rounded-xl bg-zinc-100/50 border-none cursor-not-allowed"
                                                 />
@@ -394,9 +533,14 @@ export default function GkwthWalletPage() {
                         >
                             <Card className="border-none bg-white rounded-[3rem] p-4 shadow-2xl ring-1 ring-zinc-100">
                                 <CardContent className="p-8 space-y-8">
-                                    <div className="space-y-1">
-                                        <h2 className="text-3xl font-black text-zinc-900">Sell GKWTH</h2>
-                                        <p className="text-lg text-zinc-400 font-bold">Unit Price: <span className="text-zinc-600">₦{sellPrice.toLocaleString()}</span></p>
+                                    <div className="flex items-center gap-4 mb-4">
+                                        <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
+                                            <ArrowUpRight size={24} />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-2xl font-black text-zinc-900">Sell GKWTH</h2>
+                                            <p className="text-sm text-zinc-500 font-medium italic">Instant sale to your linked bank account.</p>
+                                        </div>
                                     </div>
 
                                     <form onSubmit={handleWithdraw} className="space-y-6">
@@ -411,9 +555,9 @@ export default function GkwthWalletPage() {
 
                                         <div className="space-y-2">
                                             <Label className="text-sm font-bold text-zinc-500 ml-1">Wallet</Label>
-                                            <Select value="indirect">
-                                                <SelectTrigger className="h-14 px-6 rounded-xl bg-white border border-zinc-200 font-bold text-zinc-900">
-                                                    <SelectValue placeholder="Select Wallet" />
+                                            <Select defaultValue="indirect">
+                                                <SelectTrigger className="h-14 px-6 rounded-xl bg-white border border-zinc-200 font-bold text-zinc-900 w-full justify-between">
+                                                    <SelectValue>GKWTH Wallet ({indirectWallet?.amount.toLocaleString() || '0'})</SelectValue>
                                                 </SelectTrigger>
                                                 <SelectContent className="rounded-xl border-none shadow-2xl">
                                                     <SelectItem value="indirect" className="font-medium px-6">GKWTH Wallet ({indirectWallet?.amount.toLocaleString() || '0'})</SelectItem>
@@ -421,87 +565,147 @@ export default function GkwthWalletPage() {
                                             </Select>
                                         </div>
 
-                                        <div className="space-y-2">
-                                            <Label className="text-sm font-bold text-zinc-500 ml-1">Bank</Label>
-                                            <Select 
-                                                value={withdrawData.bank_code} 
-                                                onValueChange={(val) => {
-                                                    const bank = banks.find(b => b.uuid === val);
-                                                    setWithdrawData(prev => ({ ...prev, bank_code: val || '', bank_name: bank?.name || '' }));
-                                                }}
-                                            >
-                                                <SelectTrigger className="h-14 px-6 rounded-xl bg-white border border-zinc-200 font-bold text-zinc-900">
-                                                    <SelectValue placeholder="Select Bank" />
-                                                </SelectTrigger>
-                                                <SelectContent className="rounded-xl border-none shadow-2xl">
-                                                    {banks.map(bank => (
-                                                        <SelectItem key={bank.uuid} value={bank.uuid} className="font-medium px-6">
-                                                            {bank.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
 
-                                        <div className="space-y-2">
-                                            <Label className="text-sm font-bold text-zinc-500 ml-1">Account Number</Label>
-                                            <div className="flex gap-2">
-                                                <div className="relative flex-1">
-                                                    <Input 
-                                                        value={withdrawData.account_number}
-                                                        onChange={(e) => setWithdrawData(prev => ({ ...prev, account_number: e.target.value }))}
-                                                        placeholder="Enter account number"
-                                                        className="h-14 px-6 rounded-xl bg-zinc-50 border border-zinc-100 font-bold"
-                                                    />
-                                                    {isResolving && <RefreshCcw size={16} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-zinc-400" />}
+                                        {user?.bank && user?.accountNumber ? (
+                                            <div className="p-6 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Withdrawal Bank</p>
+                                                        <p className="text-xl font-black text-zinc-900">{user.bank}</p>
+                                                    </div>
+                                                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                                                        <CheckCircle2 size={24} />
+                                                    </div>
                                                 </div>
-                                                <Button 
-                                                    type="button"
-                                                    onClick={handleResolveAccount}
-                                                    disabled={isResolving || withdrawData.account_number.length < 10}
-                                                    className="h-14 px-8 rounded-xl bg-[rgb(79,70,229)] hover:bg-indigo-700 text-white font-bold"
-                                                >
-                                                    Resolve
-                                                </Button>
+                                                <div className="flex items-center justify-between pt-4 border-t border-zinc-100">
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Account Name</p>
+                                                        <p className="text-xl font-black text-zinc-900">{withdrawData.account_name || (isResolving ? 'Resolving...' : '---')}</p>
+                                                    </div>
+                                                    <Link href="/profile" className="text-xs font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-4">
+                                                        Change Details
+                                                    </Link>
+                                                </div>
                                             </div>
-                                        </div>
+                                        ) : (
+                                            <>
+                                                <div className="space-y-2">
+                                                    <Label className="text-sm font-bold text-zinc-500 ml-1">Bank</Label>
+                                                    <SearchableSelect 
+                                                         items={banks.map(bank => ({ label: bank.name, value: bank.uuid }))}
+                                                         value={withdrawData.bank_code} 
+                                                         onValueChange={(val: string) => {
+                                                             const bank = banks.find(b => b.uuid === val);
+                                                             setWithdrawData(prev => ({ ...prev, bank_code: val || '', bank_name: bank?.name || '', account_name: '' }));
+                                                             if (withdrawData.account_number.length === 10 && val) {
+                                                                 handleResolveAccount(withdrawData.account_number, val);
+                                                             }
+                                                         }}
+                                                         placeholder="Select Bank"
+                                                         triggerClassName="h-14 px-6 rounded-xl bg-white border border-zinc-200 font-bold text-zinc-900"
+                                                     />
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label className="text-sm font-bold text-zinc-500 ml-1">Account Number</Label>
+                                                    <div className="relative">
+                                                        <Input 
+                                                            value={withdrawData.account_number}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                setWithdrawData(prev => ({ ...prev, account_number: val }));
+                                                                if (val.length === 10 && withdrawData.bank_code) {
+                                                                    handleResolveAccount(val, withdrawData.bank_code);
+                                                                } else if (val.length < 10) {
+                                                                    setWithdrawData(prev => ({ ...prev, account_name: '' }));
+                                                                }
+                                                            }}
+                                                            placeholder="Enter account number"
+                                                            className="h-14 px-6 rounded-xl bg-zinc-50 border border-zinc-100 font-bold"
+                                                        />
+                                                        {isResolving && <Loader2 size={16} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-zinc-400" />}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
 
                                         <div className="space-y-2">
                                             <Label className="text-sm font-bold text-zinc-500 ml-1">Account Name</Label>
-                                            <Input 
-                                                value={withdrawData.account_name}
-                                                readOnly
-                                                placeholder="Validated Account Name"
-                                                className="h-14 px-6 rounded-xl bg-zinc-100/50 border-none font-bold text-zinc-600"
-                                            />
+                                            <div className="relative">
+                                                <Input 
+                                                    value={withdrawData.account_name}
+                                                    readOnly
+                                                    placeholder={isResolving ? "Resolving..." : "Validated Account Name"}
+                                                    className={cn(
+                                                        "h-16 rounded-2xl border-none font-black transition-all duration-300",
+                                                        withdrawData.account_name 
+                                                            ? "bg-emerald-50 text-emerald-600" 
+                                                            : "bg-zinc-50 text-zinc-400 placeholder:text-zinc-300"
+                                                    )}
+                                                />
+                                                <AnimatePresence>
+                                                    {withdrawData.account_name && !isResolving && (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, scale: 0.5 }}
+                                                            animate={{ opacity: 1, scale: 1 }}
+                                                            exit={{ opacity: 0, scale: 0.5 }}
+                                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500 bg-emerald-100/50 p-1 rounded-full"
+                                                        >
+                                                            <CheckCircle2 size={20} />
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
                                         </div>
 
+
                                         <div className="space-y-2">
-                                            <Label className="text-sm font-bold text-zinc-500 ml-1">Amount</Label>
+                                            <Label className="text-sm font-bold text-zinc-500 ml-1">GKWTH Quantity</Label>
                                             <Input 
                                                 value={withdrawData.amount}
                                                 onChange={(e) => setWithdrawData(prev => ({ ...prev, amount: e.target.value }))}
-                                                placeholder="Enter amount"
+                                                placeholder="Enter quantity"
                                                 className="h-14 px-6 rounded-xl bg-white border border-zinc-200 font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                 type="number"
                                             />
                                         </div>
 
                                         <div className="space-y-2">
-                                            <Label className="text-sm font-bold text-zinc-500 ml-1">Withdrawal Pin</Label>
-                                            <Input 
-                                                value={withdrawData.pin}
-                                                onChange={(e) => setWithdrawData(prev => ({ ...prev, pin: e.target.value }))}
-                                                type="password"
-                                                maxLength={4}
-                                                placeholder="****"
-                                                className="h-14 px-6 rounded-xl bg-white border border-zinc-200 font-bold"
-                                            />
+                                            <Label className="text-sm font-bold text-zinc-500 ml-1">Price</Label>
+                                            <div className="relative">
+                                                <div className="absolute left-6 top-1/2 -translate-y-1/2 text-lg font-bold text-zinc-400">₦</div>
+                                                <Input 
+                                                    value={withdrawData.amount ? (Number(withdrawData.amount) * purchasePrice).toLocaleString() : '0'}
+                                                    readOnly
+                                                    className="h-14 pl-12 text-xl font-bold rounded-xl bg-zinc-100/50 border-none cursor-not-allowed"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label className="text-sm font-bold text-zinc-500 ml-1">
+                                                {user?.role === 8 ? 'Withdrawal OTP' : 'Withdrawal PIN'}
+                                            </Label>
+                                            <div className="relative">
+                                                <Input 
+                                                    value={user?.role === 8 ? withdrawData.otp : withdrawData.pin}
+                                                    onChange={(e) => setWithdrawData(prev => ({ 
+                                                        ...prev, 
+                                                        [user?.role === 8 ? 'otp' : 'pin']: e.target.value 
+                                                    }))}
+                                                    type={user?.role === 8 ? 'text' : 'password'}
+                                                    maxLength={user?.role === 8 ? 6 : 4}
+                                                    placeholder={user?.role === 8 ? "000000" : "****"}
+                                                    className="h-14 px-12 rounded-xl bg-white border border-zinc-200 font-bold"
+                                                />
+                                                <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-300" />
+                                            </div>
                                         </div>
 
                                         <Button 
-                                            disabled={isWithdrawing || !withdrawData.account_name}
-                                            className="w-40 h-14 rounded-xl bg-[rgb(79,70,229)] hover:bg-indigo-700 text-white font-black shadow-lg transition-all"
+                                            type="submit"
+                                            disabled={isWithdrawing}
+                                            className="w-40 h-14 rounded-xl bg-[rgb(79,70,229)] hover:bg-indigo-700 text-white font-black shadow-lg transition-all disabled:opacity-50"
                                         >
                                             {isWithdrawing ? "Processing..." : "Withdraw"}
                                         </Button>
@@ -511,251 +715,193 @@ export default function GkwthWalletPage() {
                         </motion.div>
                     )}
 
-                    {/* Loan Content */}
-                    {activeTab === 'loan' && (
-                        <motion.div 
-                            key="loan"
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -20 }}
-                            className="space-y-8"
-                        >
-                            <div className="grid lg:grid-cols-2 gap-8">
-                                {/* Eligibility Checklist */}
-                                <Card className="border-none bg-white rounded-[3rem] p-8 shadow-2xl ring-1 ring-zinc-100 h-fit">
-                                    <div className="space-y-6">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
-                                                <ShieldCheck size={24} />
-                                            </div>
-                                            <h3 className="text-2xl font-black text-zinc-900">Loan Eligibility</h3>
-                                        </div>
-
-                                        <div className="space-y-4">
-                                            {[
-                                                { label: "Account Age 3+ Months", check: user?.createdAt && new Date(user.createdAt) <= threeMonthsAgo },
-                                                { label: "12+ Direct Referrals", check: null }, // We don't have this count directly here
-                                                { label: "No Outstanding Debt", check: null },
-                                                { label: "Active Bank Details", check: !!user?.bank && !!user?.accountNumber },
-                                                { label: "Requested > Balance", check: Number(loanQuantity) > (indirectWallet?.amount || 0) }
-                                            ].map((item, i) => (
-                                                <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-zinc-50 border border-zinc-100">
-                                                    <span className="font-bold text-zinc-600">{item.label}</span>
-                                                    {item.check === true ? (
-                                                        <CheckCircle2 className="text-emerald-500" size={20} />
-                                                    ) : item.check === false ? (
-                                                        <AlertCircle className="text-rose-500" size={20} />
-                                                    ) : (
-                                                        <Info className="text-zinc-300" size={20} />
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 flex gap-4">
-                                            <AlertCircle className="text-amber-500 shrink-0" size={24} />
-                                            <p className="text-sm font-bold text-amber-900 leading-relaxed italic">
-                                                Loan requests are reviewed by the administration. Ensure your profile is fully up-to-date before requesting.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </Card>
-
-                                {/* Request Form */}
-                                <Card className="border-none bg-white rounded-[3rem] p-8 shadow-2xl ring-1 ring-zinc-100">
-                                    <div className="space-y-8">
-                                        <div className="space-y-1">
-                                            <h2 className="text-3xl font-black text-zinc-900">Request Loan</h2>
-                                            <p className="text-lg text-zinc-400 font-bold italic">
-                                                Borrow assets to increase your trading power
-                                            </p>
-                                        </div>
-
-                                        <form onSubmit={handleLoanRequest} className="space-y-6">
-                                            <div className="space-y-2">
-                                                <Label className="text-sm font-bold text-zinc-500 ml-1">Asset Quantity (GKWTH)</Label>
-                                                <Input 
-                                                    value={loanQuantity}
-                                                    onChange={(e) => setLoanQuantity(e.target.value)}
-                                                    placeholder="Enter quantity to borrow" 
-                                                    className="h-16 px-6 text-2xl font-black rounded-2xl bg-zinc-50 border border-zinc-100 focus-visible:ring-2 focus-visible:ring-indigo-600 transition-all"
-                                                    type="number"
-                                                    step="0.01"
-                                                />
-                                            </div>
-
-                                            <div className="p-6 bg-indigo-50 rounded-3xl border border-indigo-100">
-                                                <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-2">Total Repayment Amount</p>
-                                                <div className="flex items-baseline gap-2">
-                                                    <span className="text-lg font-bold text-indigo-400">₦</span>
-                                                    <span className="text-3xl font-black text-indigo-900">
-                                                        {(Number(loanQuantity) * fundPrice).toLocaleString()}
-                                                    </span>
-                                                </div>
-                                                <p className="text-[10px] text-indigo-400 font-bold mt-2 italic">
-                                                    *Based on current market price of ₦{fundPrice.toLocaleString()}
-                                                </p>
-                                            </div>
-
-                                            <Button 
-                                                disabled={isRequestingLoan || !loanQuantity || Number(loanQuantity) <= (indirectWallet?.amount || 0)}
-                                                className="w-full h-16 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-xl shadow-indigo-100 transition-all"
-                                            >
-                                                {isRequestingLoan ? "Submitting..." : "Submit Loan Request"}
-                                            </Button>
-                                        </form>
-                                    </div>
-                                </Card>
-                            </div>
-
-                            {/* Loan History Table */}
-                            <Card className="border-none bg-white rounded-[4rem] p-8 shadow-2xl ring-1 ring-zinc-100 overflow-hidden">
-                                <div className="flex items-center justify-between mb-8">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-3 bg-zinc-100 text-zinc-600 rounded-2xl">
-                                            <Activity size={24} />
-                                        </div>
-                                        <h3 className="text-2xl font-black text-zinc-900">Loan History</h3>
-                                    </div>
-                                    <Badge variant="outline" className="px-4 py-1.5 rounded-full font-black text-zinc-400 border-zinc-100">
-                                        Recent Requests
-                                    </Badge>
-                                </div>
-
-                                <div className="overflow-x-auto no-scrollbar -mx-8 px-8">
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="border-b border-zinc-100">
-                                                <th className="pb-4 text-left text-xs font-black text-zinc-400 uppercase tracking-widest px-4">Date</th>
-                                                <th className="pb-4 text-left text-xs font-black text-zinc-400 uppercase tracking-widest px-4">Quantity</th>
-                                                <th className="pb-4 text-left text-xs font-black text-zinc-400 uppercase tracking-widest px-4">Status</th>
-                                                <th className="pb-4 text-right text-xs font-black text-zinc-400 uppercase tracking-widest px-4">Repaid</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {loansResponse?.data?.data?.map((loan) => (
-                                                <tr key={loan.id} className="group hover:bg-zinc-50/50 transition-colors">
-                                                    <td className="py-6 px-4">
-                                                        <div className="flex flex-col">
-                                                            <span className="font-bold text-zinc-900">{new Date(loan.createdAt).toLocaleDateString()}</span>
-                                                            <span className="text-[10px] text-zinc-400 font-black">{new Date(loan.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-6 px-4">
-                                                        <span className="text-lg font-black text-zinc-900">G {loan.quantityRequested.toLocaleString()}</span>
-                                                    </td>
-                                                    <td className="py-6 px-4">
-                                                        <Badge className={cn(
-                                                            "rounded-full px-4 py-1 font-black text-[10px] uppercase tracking-tighter",
-                                                            loan.status === 'pending' ? "bg-amber-50 text-amber-600 border border-amber-100" :
-                                                            loan.status === 'granted' ? "bg-emerald-50 text-emerald-600 border border-emerald-100" :
-                                                            "bg-rose-50 text-rose-600 border border-rose-100"
-                                                        )}>
-                                                            {loan.status}
-                                                        </Badge>
-                                                    </td>
-                                                    <td className="py-6 px-4 text-right">
-                                                        <div className="flex flex-col items-end">
-                                                            <span className="font-black text-indigo-600">G {loan.quantityRepaid.toLocaleString()}</span>
-                                                            <div className="w-20 h-1.5 bg-zinc-100 rounded-full mt-2 overflow-hidden">
-                                                                <div 
-                                                                    className="h-full bg-indigo-500 rounded-full transition-all duration-1000" 
-                                                                    style={{ width: `${(loan.quantityRepaid / (loan.quantityGranted || 1)) * 100}%` }}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                            {(!loansResponse?.data?.data || loansResponse.data.data.length === 0) && (
-                                                <tr>
-                                                    <td colSpan={4} className="py-20 text-center">
-                                                        <div className="flex flex-col items-center gap-4 opacity-20">
-                                                            <Activity size={60} />
-                                                            <p className="font-black text-zinc-900 uppercase tracking-widest text-sm">No loan history found</p>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </Card>
-                        </motion.div>
-                    )}
                 </AnimatePresence>
                 {/* Payment Modal */}
-                <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-                    <DialogContent className="sm:max-w-md bg-white rounded-[2rem] border-none shadow-2xl p-0 overflow-hidden">
-                        <div className="bg-indigo-600 p-8 text-white relative">
+                <Dialog open={isPaymentModalOpen} onOpenChange={handlePaymentModalOpenChange}>
+                    <DialogContent className="max-w-md rounded-[2.5rem] border-none p-0 overflow-hidden bg-white shadow-2xl">
+                        <div className="bg-indigo-600 p-8 text-white relative overflow-hidden">
                             <div className="absolute top-0 right-0 p-8 opacity-10">
-                                <DollarSign size={80} />
+                                <Plus size={120} />
                             </div>
-                            <DialogHeader>
-                                <DialogTitle className="text-2xl font-black flex items-center gap-2">
-                                    <CheckCircle2 className="text-indigo-200" />
-                                    Fund Your Wallet
-                                </DialogTitle>
+                            <DialogHeader className="relative z-10">
+                                <DialogTitle className="text-2xl font-black">Transfer Details</DialogTitle>
                                 <DialogDescription className="text-indigo-100 font-medium">
-                                    Transfer the exact amount below to the virtual account to complete your purchase.
+                                    Follow the instructions below to fund your GKWTH wallet.
                                 </DialogDescription>
                             </DialogHeader>
                         </div>
                         
                         <div className="p-8 space-y-6">
-                            <div className="space-y-4">
-                                <div className="p-6 bg-zinc-50 rounded-2xl border border-zinc-100 flex items-center justify-between group">
-                                    <div className="space-y-1">
-                                        <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Account Number</p>
-                                        <p className="text-2xl font-black text-zinc-900 tracking-tight">{paymentDetails?.account_number}</p>
-                                    </div>
+                            {/* Noticeable Amount Card */}
+                            <div className="bg-indigo-50 border-2 border-indigo-100 rounded-[2rem] p-6 text-center space-y-2 shadow-sm">
+                                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none">Amount to Transfer</p>
+                                <div className="flex items-center justify-center gap-2">
+                                    <span className="text-3xl font-black text-indigo-600">₦</span>
+                                    <h1 className="text-5xl md:text-6xl font-black text-zinc-900 tracking-tighter">
+                                        {paymentDetails?.amount?.toLocaleString()}
+                                    </h1>
+                                </div>
+                                <div className="flex justify-center pt-1">
                                     <Button 
                                         variant="ghost" 
-                                        size="icon" 
-                                        onClick={() => copyToClipboard(paymentDetails?.account_number || '', 'Account Number')}
-                                        className="h-12 w-12 rounded-xl hover:bg-white hover:shadow-md transition-all"
+                                        size="sm"
+                                        onClick={() => {
+                                            if (paymentDetails?.amount) {
+                                                navigator.clipboard.writeText(paymentDetails.amount.toString());
+                                                toast.success('Amount copied!');
+                                            }
+                                        }}
+                                        className="h-8 px-4 text-[10px] font-black uppercase tracking-wider text-indigo-600 hover:bg-indigo-100 rounded-full bg-white/50 border border-indigo-100/50"
                                     >
-                                        <Copy size={20} className="text-indigo-600" />
+                                        <Copy size={12} className="mr-2" /> Copy Amount
                                     </Button>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
-                                        <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Bank Name</p>
-                                        <p className="font-black text-zinc-900">{paymentDetails?.bank_name}</p>
-                                    </div>
-                                    <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
-                                        <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Account Name</p>
-                                        <p className="font-black text-zinc-900">{paymentDetails?.account_name}</p>
-                                    </div>
-                                </div>
-
-                                <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center justify-between">
-                                    <div className="space-y-1">
-                                        <p className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Total Amount</p>
-                                        <p className="text-2xl font-black text-indigo-700">₦{paymentDetails?.amount.toLocaleString()}</p>
-                                    </div>
-                                    <Badge className="bg-white text-indigo-600 border-indigo-200 font-bold px-3 py-1">Exact Amount</Badge>
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-3 p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                                <Clock className="text-amber-500 shrink-0" size={20} />
-                                <p className="text-sm font-bold text-amber-700">
-                                    This account expires at <span className="underline">{paymentDetails?.expiry_date} today</span>. Please complete the transfer before then.
+                            <div className="space-y-4">
+                                <div className="p-4 bg-zinc-50 rounded-2xl flex items-center justify-between group hover:bg-zinc-100 transition-colors">
+                                    <div>
+                                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Bank Name</p>
+                                        <p className="text-lg font-black text-zinc-900">{paymentDetails?.bank_name}</p>
+                                    </div>
+                                    <div className="p-2 bg-white rounded-lg shadow-xs group-hover:scale-110 transition-transform">
+                                        <Plus className="text-indigo-600" size={20} />
+                                    </div>
+                                </div>
+
+                                <div className="p-4 bg-zinc-50 rounded-2xl flex items-center justify-between group hover:bg-zinc-100 transition-colors">
+                                    <div>
+                                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Account Number</p>
+                                        <p className="text-lg font-black text-zinc-900 tracking-wider">{paymentDetails?.account_number}</p>
+                                    </div>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="icon"
+                                        onClick={() => copyToClipboard(paymentDetails?.account_number || '', 'Account Number')}
+                                        className="bg-white hover:bg-indigo-50 text-indigo-600 rounded-xl shadow-xs"
+                                    >
+                                        <Copy size={18} />
+                                    </Button>
+                                </div>
+
+                                <div className="p-4 bg-zinc-50 rounded-2xl group hover:bg-zinc-100 transition-colors">
+                                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Account Name</p>
+                                    <p className="text-lg font-black text-zinc-900">{paymentDetails?.account_name}</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 p-4 bg-amber-50 rounded-2xl text-amber-700">
+                                <Clock size={20} className="shrink-0" />
+                                <p className="text-xs font-bold leading-relaxed italic">
+                                    This account expires at {paymentDetails?.expiry_date}. Please complete the transfer before then.
                                 </p>
                             </div>
 
                             <Button 
-                                onClick={() => setIsPaymentModalOpen(false)}
-                                className="w-full h-14 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-black shadow-lg"
+                                onClick={startPolling}
+                                className="w-full h-16 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-xl shadow-indigo-100 transition-all"
                             >
-                                Done
+                                I&apos;ve Made The Transfer
                             </Button>
                         </div>
                     </DialogContent>
                 </Dialog>
             </div>
+
+            {/* Polling/Processing Modal (Replicated from wallets/page.tsx) */}
+            <Dialog open={showPollingModal} onOpenChange={() => {}}>
+                <DialogContent className="max-w-sm rounded-[2.5rem] border-none p-12 text-center bg-white shadow-2xl overflow-hidden relative">
+                    <div className="absolute top-0 inset-x-0 h-2 bg-zinc-100 overflow-hidden">
+                        <motion.div 
+                            className="h-full bg-indigo-600"
+                            initial={{ x: "-100%" }}
+                            animate={{ x: "100%" }}
+                            transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                        />
+                    </div>
+                    <div className="space-y-6">
+                        <div className="relative inline-block">
+                            <div className="absolute inset-0 bg-indigo-100 rounded-full animate-ping opacity-25" />
+                            <div className="relative h-20 w-20 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto">
+                                <Loader2 className="animate-spin" size={40} />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <h2 className="text-2xl font-black text-zinc-900 italic">Verifying Payment</h2>
+                            <p className="text-sm text-zinc-500 font-medium">
+                                We&apos;re checking your transfer details. This usually takes less than a minute.
+                            </p>
+                        </div>
+                        <div className="flex justify-center gap-1.5 pt-4">
+                            {[0, 1, 2].map((i) => (
+                                <motion.div
+                                    key={i}
+                                    initial={{ opacity: 0.3 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ repeat: Infinity, duration: 0.8, delay: i * 0.2 }}
+                                    className="w-2 h-2 rounded-full bg-indigo-600"
+                                />
+                            ))}
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Success Modal */}
+            <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
+                <DialogContent className="max-w-sm rounded-[2.5rem] border-none p-12 text-center bg-white shadow-2xl">
+                    <div className="space-y-6">
+                        <div className="h-20 w-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                            <CheckCircle size={40} />
+                        </div>
+                        <div className="space-y-2">
+                            <h2 className="text-3xl font-black text-zinc-900">Success!</h2>
+                            <p className="text-sm text-zinc-500 font-medium italic">
+                                Your payment has been confirmed and your GKWTH wallet has been funded.
+                            </p>
+                        </div>
+                        <Button 
+                            onClick={() => setShowSuccessModal(false)}
+                            className="w-full h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-lg shadow-emerald-100 transition-all"
+                        >
+                            Back To Wallet
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Pending/Manual Modal */}
+            <Dialog open={showPendingModal} onOpenChange={setShowPendingModal}>
+                <DialogContent className="max-w-md rounded-[2.5rem] border-none p-12 text-center bg-white shadow-2xl">
+                    <div className="space-y-6">
+                        <div className="h-20 w-20 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto">
+                            <AlertCircle size={40} />
+                        </div>
+                        <div className="space-y-2">
+                            <h2 className="text-2xl font-black text-zinc-900">Payment Processing</h2>
+                            <p className="text-sm text-zinc-500 font-medium leading-relaxed italic">
+                                Your transfer is taking a bit longer to verify. Don&apos;t worry, your funds are safe! 
+                                If your wallet isn&apos;t updated within 30 minutes, please contact support.
+                            </p>
+                        </div>
+                        <div className="p-4 bg-zinc-50 rounded-2xl flex items-center gap-3 text-left">
+                            <div className="p-2 bg-white rounded-xl shadow-sm">
+                                <MessageCircle size={20} className="text-indigo-600" />
+                            </div>
+                            <div className="text-xs">
+                                <p className="font-black text-zinc-900">Need Help?</p>
+                                <p className="text-zinc-500 font-medium">Chat with our support team</p>
+                            </div>
+                        </div>
+                        <Button 
+                            onClick={() => setShowPendingModal(false)}
+                            className="w-full h-14 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-white font-black shadow-lg transition-all"
+                        >
+                            Got It
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

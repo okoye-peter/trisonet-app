@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import axios from 'axios';
+import https from 'https';
 import { PAGA, COMPANY_DETAILS } from '../config/constants';
 import { logger, pagaLogger } from '../utils/logger';
 import { AppError } from '../utils/AppError';
@@ -26,7 +28,8 @@ export class PagaService {
         this.publicKey = PAGA.USERNAME || '';
         this.secretKey = PAGA.SECRET_KEY || '';
         this.hashKey = PAGA.HMAC_KEY || '';
-        this.testMode = PAGA.TEST_MODE;
+        // this.testMode = PAGA.TEST_MODE;
+        this.testMode = false;
         this.businessPublicId = PAGA.BUSINESS_PUBLIC_ID || '';
         this.businessPassword = PAGA.BUSINESS_PASSWORD || '';
 
@@ -45,10 +48,10 @@ export class PagaService {
      * Get list of banks
      */
     async getBanks(): Promise<PagaResponse> {
-        return await getOrSetCache('paga_banks', 86400, async () => {
-            const referenceNumber = this.generateReference('BNK');
-            const hash = this.generateHash([referenceNumber]);
+        const referenceNumber = this.generateReference('BNK');
+        const hash = this.generateHash([referenceNumber]);
 
+        return await getOrSetCache('paga__banks', 86400, async () => {
             return await this.callApi('getBanks', { referenceNumber }, hash, true);
         });
     }
@@ -91,20 +94,18 @@ export class PagaService {
         options: any = {}
     ): Promise<PagaResponse> {
         const refNumber = referenceNumber || this.generateReference('VR');
-        
+
         // Expiry handling
         let expiry = options.expiryDateTimeUTC;
-        if (!expiry) {
-            const date = new Date();
-            date.setMinutes(date.getMinutes() + 30);
-            expiry = date.toISOString().replace(/\.\d{3}Z$/, ''); // Roughly Y-m-d\TH:i:s
+        if (!expiry || this.isDateExpired(expiry)) {
+            expiry = this.getNigeriaExpiry();
         }
 
         const currency = "NGN";
 
         const payer = {
             name: customerName,
-            phoneNumber: customerPhoneNumber || COMPANY_DETAILS.PHONE_NUMBER,
+            phoneNumber: this.formatPhoneNumber(customerPhoneNumber || COMPANY_DETAILS.PHONE_NUMBER),
             email: "",
             ...options.payer
         };
@@ -112,15 +113,16 @@ export class PagaService {
         const payee = {
             name: COMPANY_DETAILS.NAME, // Should be app name from config but hardcoded for now based on COMPANY_DETAILS
             accountNumber: "",
-            phoneNumber: "",
+            phoneNumber: this.formatPhoneNumber(options.payee?.phoneNumber || ""),
             bankId: "",
             bankAccountNumber: "",
             ...options.payee
         };
 
-        const payload = {
+        const payload: any = {
+            ...options,
             referenceNumber: refNumber,
-            amount: amount,
+            amount: parseFloat(amount.toString()),
             currency: currency,
             payer: Object.fromEntries(Object.entries(payer).filter(([_, v]) => v !== "")),
             payee: Object.fromEntries(Object.entries(payee).filter(([_, v]) => v !== "")),
@@ -129,8 +131,7 @@ export class PagaService {
             isAllowOverPayments: true,
             isAllowPartialPayments: false,
             paymentMethods: ["BANK_TRANSFER"],
-            callbackUrl: process.env.PAGA_CALLBACK_URL, // Need to handle routes
-            ...options,
+            callbackUrl: PAGA.CALLBACK_URL,
             expiryDateTimeUTC: expiry
         };
 
@@ -167,7 +168,7 @@ export class PagaService {
                     account_name: virtualAccountDetails.account_name,
                     amount: data.totalPaymentAmount || amount,
                     reference: refNumber,
-                    expires_at: data.expiryDateTimeUTC || null,
+                    expires_at: (data.expiryDateTimeUTC || expiry || '').split('T')[1]?.substring(0, 5) || null,
                     full_response: data
                 }
             };
@@ -280,10 +281,10 @@ export class PagaService {
         const isValid = statusCode === 0 || statusCode === '0';
 
         if (!isValid) {
-            pagaLogger.error(`Paga resolveBankDetails Failure`, { 
-                accountNumber, 
-                bankUUID, 
-                response: apiData 
+            pagaLogger.error(`Paga resolveBankDetails Failure`, {
+                accountNumber,
+                bankUUID,
+                response: apiData
             });
             return {
                 success: false,
@@ -374,10 +375,10 @@ export class PagaService {
         const isSuccess = statusCode === 0 || statusCode === '0';
 
         if (!isSuccess) {
-            pagaLogger.error(`Paga withdraw Failure`, { 
-                destinationAccount, 
-                amount, 
-                response: data 
+            pagaLogger.error(`Paga withdraw Failure`, {
+                destinationAccount,
+                amount,
+                response: data
             });
         }
 
@@ -435,11 +436,11 @@ export class PagaService {
         const isSuccess = statusCode === 0 || statusCode === '0';
 
         if (!isSuccess) {
-            pagaLogger.error(`Paga withdrawToBank Failure`, { 
-                destinationBankAccountNumber, 
-                destinationBankUUID, 
-                amount, 
-                response: data 
+            pagaLogger.error(`Paga withdrawToBank Failure`, {
+                destinationBankAccountNumber,
+                destinationBankUUID,
+                amount,
+                response: data
             });
         }
 
@@ -503,44 +504,50 @@ export class PagaService {
                     'hash': hash,
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
+                    'Connection': 'close',
                 };
 
                 if (isBusiness) {
                     headers['principal'] = this.businessPublicId;
                     headers['credentials'] = this.businessPassword;
-                } else {
-                    const auth = Buffer.from(`${this.publicKey}:${this.secretKey}`).toString('base64');
-                    headers['Authorization'] = `Basic ${auth}`;
                 }
 
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: headers,
-                    body: JSON.stringify(data),
+                const response = await axios.post(url, data, {
+                    headers,
+                    ...(isBusiness ? {} : {
+                        auth: {
+                            username: this.publicKey,
+                            password: this.secretKey
+                        }
+                    }),
+                    timeout: 60000,
+                    httpsAgent: new https.Agent({ keepAlive: false }),
                 });
 
-                const responseData = await response.json();
-
-                if (!response.ok) {
-                    pagaLogger.error(`Paga API Error: ${operation}`, {
-                        status: response.status,
-                        response: responseData
-                    });
-                    return {
-                        success: false,
-                        error: `API call failed with status ${response.status}: ${JSON.stringify(responseData).substring(0, 200)}`,
-                        operation: operation
-                    };
-                }
 
                 return {
                     success: true,
-                    data: responseData,
-                    operation: operation
+                    data: response.data,
+                    operation,
                 };
+
             } catch (error: any) {
-                if (error.message.includes('cURL error 18') && attempt < maxAttempts) {
-                    pagaLogger.warn(`Paga cURL 18 on attempt ${attempt}, retrying: ${operation}`);
+                if (error.response) {
+                    pagaLogger.error(`Paga API Error: ${operation}`, {
+                        status: error.response.status,
+                        response: error.response.data,
+                    });
+                    return {
+                        success: false,
+                        error: `API call failed with status ${error.response.status}: ${JSON.stringify(error.response.data).substring(0, 200)}`,
+                        operation,
+                    };
+                }
+
+                if (attempt < maxAttempts) {
+                    pagaLogger.warn(`Paga request failed on attempt ${attempt}, retrying: ${operation}`, {
+                        error: error.message,
+                    });
                     await new Promise(resolve => setTimeout(resolve, 1000));
                     continue;
                 }
@@ -549,7 +556,7 @@ export class PagaService {
                 return {
                     success: false,
                     error: error.message,
-                    operation: operation
+                    operation,
                 };
             }
         }
@@ -557,7 +564,7 @@ export class PagaService {
         return {
             success: false,
             error: 'Maximum retry attempts reached',
-            operation: operation
+            operation,
         };
     }
 
@@ -573,18 +580,29 @@ export class PagaService {
     }
 
     /**
+     * Format phone number for Paga (digits only, e.g. 2348103...)
+     */
+    private formatPhoneNumber(phoneNumber: string): string {
+        if (!phoneNumber) return '';
+
+        // Remove all non-digits
+        let cleaned = phoneNumber.replace(/\D/g, '');
+
+        // If it starts with 0, replace with 234
+        if (cleaned.startsWith('0') && cleaned.length === 11) {
+            cleaned = '234' + cleaned.substring(1);
+        }
+
+        return cleaned;
+    }
+
+    /**
      * Generate unique reference
      */
     generateReference(prefix: string = 'PAGA'): string {
-        const timestamp = Math.floor(Date.now() / 1000).toString(16);
-        const neededRandom = 12 - prefix.length - timestamp.length;
-        let random = '';
-        
-        if (neededRandom > 0) {
-            random = crypto.randomBytes(neededRandom / 2).toString('hex').toUpperCase();
-        }
-
-        return (prefix + timestamp + random).toUpperCase();
+        const timestamp = Math.floor(Date.now() / 1000).toString(16).toUpperCase();
+        const randomBytes = crypto.randomBytes(4).toString('hex').toUpperCase(); // always 8 chars
+        return `${prefix.toUpperCase()}${timestamp}${randomBytes}`;
     }
 
     /**
@@ -649,4 +667,37 @@ export class PagaService {
             }
         }
     }
+
+    private getNigeriaExpiry() {
+        const date = new Date();
+        date.setMinutes(date.getMinutes() + 30);
+        return new Intl.DateTimeFormat('sv-SE', {
+            timeZone: 'Africa/Lagos',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).format(date).replace(' ', 'T');
+    };
+
+    private isDateExpired(expiryString: string): boolean {
+        const expiryDate = new Date(expiryString);
+        // Get current time in Lagos
+        const nowLagos = new Date(new Intl.DateTimeFormat('sv-SE', {
+            timeZone: 'Africa/Lagos',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).format(new Date()).replace(' ', 'T'));
+
+        return expiryDate <= nowLagos;
+    }
+
 }

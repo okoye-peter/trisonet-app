@@ -48,6 +48,35 @@ export const walletApi = apiSlice.injectEndpoints({
             }),
             providesTags: ['Loan'],
         }),
+        generateWardSlotVirtualAccount: builder.mutation<AppResponse<{ account_detail: { account_name: string; bank_name: string; account_number: string; amount: number; expiry_date: string } }>, { type: 'limited' | 'unlimited'; quantity?: number }>({
+            query: (body) => ({
+                url: 'payment/wards/generate-virtual-account',
+                method: 'POST',
+                body,
+            }),
+        }),
+        initiateDirectWalletFunding: builder.mutation<AppResponse<{ 
+            reference: string; 
+            amount: number; 
+            publicKey: string; 
+            email: string; 
+            phone: string;
+            account_detail: {
+                account_name: string;
+                bank_name: string;
+                account_number: string;
+                expiry_date: string;
+            }
+        }>, { amount: number }>({
+            query: (body) => ({
+                url: 'payment/wallet/direct/funding',
+                method: 'POST',
+                body,
+            }),
+        }),
+        checkFundingStatus: builder.query<AppResponse<{ status: 'success' | 'pending' | 'failed' }>, string>({
+            query: (reference) => `payment/wallet/check-status/${reference}`,
+        }),
     }),
 });
 
@@ -58,5 +87,9 @@ export const {
     useGetGkwthPricesQuery, 
     usePurchaseGkwthMutation,
     useRequestAssetLoanMutation,
-    useGetAssetLoansQuery
+    useGetAssetLoansQuery,
+    useGenerateWardSlotVirtualAccountMutation,
+    useInitiateDirectWalletFundingMutation,
+    useLazyCheckFundingStatusQuery,
+    useCheckFundingStatusQuery
 } = walletApi;

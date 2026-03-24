@@ -133,8 +133,8 @@ export interface SubCableRequest {
 export interface Bank {
     name: string;
     uuid: string;
-    interInstitutionCode: string;
-    sortCode: string;
+    interInstitutionCode: string | null;
+    sortCode: string | null;
     directDebitEnabled: boolean;
 }
 
@@ -150,7 +150,7 @@ export interface WardStats {
     unlimitedSlotPrice: number;
 }
 
-export interface Ward extends User {}
+export interface Ward extends User { }
 
 export interface PaginatedResult<T> {
     data: T[];
@@ -299,4 +299,15 @@ export interface Loan {
     wallet?: {
         type: Wallet['type'];
     };
+}
+
+export interface UpdateProfileRequest {
+    name?: string;
+    phone?: string;
+}
+
+export interface UpdateBankRequest {
+    bank: string;
+    accountNumber: string;
+    currentPassword: string;
 }
