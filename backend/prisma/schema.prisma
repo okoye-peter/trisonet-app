@@ -5,7 +5,7 @@ generator client {
 
 datasource db {
     provider = "mysql"
-    url = env("DATABASE_URL")
+    url      = env("DATABASE_URL")
 }
 
 model User {
@@ -646,14 +646,13 @@ model Notification {
 
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model NotificationUser {
-    id             BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
     status         Boolean      @default(false)
     userId         BigInt       @map("user_id") @db.UnsignedBigInt
     notificationId BigInt       @map("notification_id") @db.UnsignedBigInt
     notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "notification_user_notification_id_foreign")
     user           User         @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "notification_user_user_id_foreign")
 
-    @@unique([userId, notificationId], map: "notification_user_user_id_notification_id_unique")
+    @@id([userId, notificationId])
     @@index([notificationId], map: "notification_user_notification_id_foreign")
     @@index([userId], map: "notification_user_user_id_foreign")
     @@map("notification_user")
@@ -1069,6 +1068,8 @@ model WithDrawal {
     newBalance                 String?                  @map("new_balance") @db.VarChar(255)
     gkwthPrice                 Float?                   @map("gkwth_price")
     paystackRef                String?                  @map("paystack_ref") @db.VarChar(255)
+    pagaRef                    String?                  @map("paga_ref") @db.VarChar(255)
+    pagaTransactionId          String?                  @map("paga_transaction_id") @db.VarChar(255)
     userType                   WithdrawalUserType       @default(customer) @map("user_type")
     userEmail                  String?                  @map("user_email") @db.VarChar(255)
     sponsorInvestmentReturnsId BigInt?                  @map("sponsor_investment_returns_id") @db.UnsignedBigInt
@@ -1474,4 +1475,6 @@ enum WithdrawalRequestUserType {
 enum WithdrawalRequestStatus {
     pending
     being_processed
+    processed
+    failed
 }

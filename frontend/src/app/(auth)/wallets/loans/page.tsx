@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useGetWalletsQuery, useGetGkwthPricesQuery, useRequestAssetLoanMutation, useGetAssetLoansQuery } from '@/store/api/walletApi';
+import { useGetUserDashboardStatsQuery } from '@/store/api/userApi';
 import LoadingScreen from '@/components/LoadingScreen';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
@@ -27,6 +28,7 @@ export default function LoansPage() {
     const { data: pricesResponse } = useGetGkwthPricesQuery();
     const [requestAssetLoan, { isLoading: isRequestingLoan }] = useRequestAssetLoanMutation();
     const { data: loansResponse } = useGetAssetLoansQuery();
+    const { data: statsResponse } = useGetUserDashboardStatsQuery();
     
     // Eligibility calculation
     const threeMonthsAgo = useState(() => {
@@ -45,13 +47,17 @@ export default function LoansPage() {
 
     const handleLoanRequest = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!loanQuantity || Number(loanQuantity) <= (indirectWallet?.amount || 0)) {
-            toast.error(`Loan quantity must be greater than your current balance (${indirectWallet?.amount || 0})`);
+        
+        const currentBalance = indirectWallet?.amount || 0;
+        const requestedQuantity = Number(loanQuantity);
+
+        if (!loanQuantity || requestedQuantity <= currentBalance) {
+            toast.error(`Loan quantity must be greater than your current balance (${currentBalance})`);
             return;
         }
 
         try {
-            await requestAssetLoan({ quantity: Number(loanQuantity) }).unwrap();
+            await requestAssetLoan({ quantity: requestedQuantity }).unwrap();
             toast.success('Asset loan request submitted successfully');
             setLoanQuantity('');
         } catch (err) {
@@ -70,7 +76,7 @@ export default function LoansPage() {
                 <motion.div 
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="relative overflow-hidden rounded-[3rem] bg-indigo-950 p-12 text-white shadow-2xl"
+                    className="relative overflow-hidden rounded-3xl md:rounded-[3rem] bg-indigo-950 p-8 md:p-12 text-white shadow-2xl"
                 >
                     <div className="absolute top-0 right-0 p-12 opacity-10 blur-3xl bg-purple-500 w-96 h-96 rounded-full -mr-48 -mt-48 animate-pulse" />
                     <div className="absolute bottom-0 left-0 p-12 opacity-10 blur-3xl bg-indigo-500 w-96 h-96 rounded-full -ml-48 -mb-48 animate-pulse" />
@@ -80,7 +86,7 @@ export default function LoansPage() {
                             <ShieldCheck size={48} className="text-indigo-300" />
                         </div>
                         <span className="text-indigo-300 font-bold uppercase tracking-[0.3em] text-xs">Asset Loan Center</span>
-                        <h1 className="text-5xl md:text-7xl font-black tracking-tighter">
+                        <h1 className="text-4xl md:text-7xl font-black tracking-tighter">
                             Empower Your <span className="text-indigo-400">Growth</span>
                         </h1>
                         <p className="text-indigo-200/70 font-medium max-w-xl text-lg italic">
@@ -96,7 +102,7 @@ export default function LoansPage() {
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.1 }}
                     >
-                        <Card className="border-none bg-white rounded-[3rem] p-8 shadow-2xl ring-1 ring-zinc-100 h-full">
+                        <Card className="border-none bg-white rounded-3xl md:rounded-[3rem] p-6 md:p-8 shadow-2xl ring-1 ring-zinc-100 h-full">
                             <CardContent className="p-0 space-y-6">
                                 <div className="flex items-center gap-3">
                                     <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
@@ -108,10 +114,10 @@ export default function LoansPage() {
                                 <div className="space-y-4">
                                     {[
                                         { label: "Account Age 3+ Months", check: user?.createdAt && new Date(user.createdAt) <= threeMonthsAgo },
-                                        { label: "12+ Direct Referrals", check: null },
-                                        { label: "No Outstanding Debt", check: null },
+                                        { label: "12+ Direct Referrals", check: (statsResponse?.data?.totalSales || 0) >= 12 },
+                                        { label: "No Outstanding Debt", check: !loansResponse?.data?.data?.some(l => l.status === 'granted' && l.quantityGranted > l.quantityRepaid) },
                                         { label: "Active Bank Details", check: !!user?.bank && !!user?.accountNumber },
-                                        { label: "Requested > Balance", check: Number(loanQuantity) > (indirectWallet?.amount || 0) }
+                                        { label: "Requested > Balance", check: loanQuantity ? Number(loanQuantity) > (indirectWallet?.amount || 0) : null }
                                     ].map((item, i) => (
                                         <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-zinc-50 border border-zinc-100">
                                             <span className="font-bold text-zinc-600">{item.label}</span>
@@ -142,7 +148,7 @@ export default function LoansPage() {
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.2 }}
                     >
-                        <Card className="border-none bg-white rounded-[3rem] p-8 shadow-2xl ring-1 ring-zinc-100">
+                        <Card className="border-none bg-white rounded-3xl md:rounded-[3rem] p-6 md:p-8 shadow-2xl ring-1 ring-zinc-100">
                             <CardContent className="p-0 space-y-8">
                                 <div className="space-y-1">
                                     <h2 className="text-3xl font-black text-zinc-900">Request Loan</h2>
@@ -181,6 +187,7 @@ export default function LoansPage() {
                                     </div>
 
                                     <Button 
+                                        type="submit"
                                         disabled={isRequestingLoan || !loanQuantity || Number(loanQuantity) <= (indirectWallet?.amount || 0)}
                                         className="w-full h-16 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-xl shadow-indigo-100 transition-all"
                                     >
@@ -198,7 +205,7 @@ export default function LoansPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3 }}
                 >
-                    <Card className="border-none bg-white rounded-[4rem] p-8 shadow-2xl ring-1 ring-zinc-100 overflow-hidden">
+                    <Card className="border-none bg-white rounded-3xl md:rounded-[4rem] p-6 md:p-8 shadow-2xl ring-1 ring-zinc-100 overflow-hidden">
                         <CardContent className="p-0">
                             <div className="flex items-center justify-between mb-8">
                                 <div className="flex items-center gap-3">
