@@ -41,6 +41,7 @@ const sidebarItems = [
         subItems: [
             { label: 'Transfers', href: '/wallets/transfers', icon: ArrowRightLeft },
             { label: 'Transactions', href: '/transactions', icon: ScrollText },
+            { label: 'Earnings', href: '/earnings', icon: TrendingUp },
             { label: 'Utility Bills', href: '/vtu', icon: Receipt },
             { label: 'Wallet', href: '/wallets', icon: Wallet },
             { label: 'Gkwth Business', href: '/wallets/gkwth', icon: Briefcase },
