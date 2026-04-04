@@ -11,9 +11,6 @@ import {
     CircleDollarSign,
     PieChart,
     CheckCircle2,
-    FileText,
-    Globe,
-    ShoppingBag,
     ChevronRight,
     ArrowRightLeft,
     ScrollText,
@@ -27,7 +24,7 @@ import { useState, useEffect } from 'react';
 
 const sidebarItems = [
     { icon: LayoutGrid, label: 'Dashboard', href: '/dashboard' },
-    { icon: Mail, label: 'Inbox', href: '/dashboard/inbox', badge: 0 },
+    // { icon: Mail, label: 'Inbox', href: '/dashboard/inbox', badge: 0 },
     { icon: Trophy, label: 'Winning Range', href: '/competitions/stats' },
     { icon: User, label: 'Profile', href: '/profile' },
     { icon: CreditCard, label: 'PIM Credit Cards', href: '/activation-cards' },
@@ -49,9 +46,9 @@ const sidebarItems = [
         ]
     },
     { icon: CheckCircle2, label: 'Winning Status', href: '/winnings/status' },
-    { icon: FileText, label: 'TrisoBrief', href: '/dashboard/brief' },
-    { icon: Globe, label: 'Gist Zone', href: '/dashboard/gist' },
-    { icon: ShoppingBag, label: 'Shopping mall', href: '/dashboard/mall' },
+    // { icon: FileText, label: 'TrisoBrief', href: '/dashboard/brief' },
+    // { icon: Globe, label: 'Gist Zone', href: '/dashboard/gist' },
+    // { icon: ShoppingBag, label: 'Shopping mall', href: '/dashboard/mall' },
 ];
 
 export function Sidebar({ isOpen, onClose }: { isOpen: boolean, onClose?: () => void }) {
@@ -81,7 +78,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean, onClose?: () => 
     return (
         <aside
             className={cn(
-                "fixed left-0 top-20 z-40 h-[calc(100vh-80px)] w-64 rounded-none border-r border-white/40 bg-white/80 backdrop-blur-xl transition-all duration-500 lg:translate-x-0 shadow-[0_8px_32px_rgba(0,0,0,0.04)]",
+                "fixed left-0 top-20 z-60 h-[calc(100vh-80px)] w-64 rounded-none border-r border-white/40 bg-white/80 backdrop-blur-xl transition-all duration-500 lg:translate-x-0 shadow-[0_8px_32px_rgba(0,0,0,0.04)]",
                 !isOpen && "-translate-x-full"
             )}
         >
@@ -217,7 +214,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean, onClose?: () => 
                 </ul>
 
                 {/* Bottom Card (Premium Ad/CT) */}
-                <div className="mt-10 px-2">
+                {/* <div className="mt-10 px-2">
                     <div className="relative rounded-2xl bg-indigo-950 p-4 overflow-hidden group">
                         <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-20 h-20 bg-indigo-500/20 rounded-full blur-2xl transition-transform group-hover:scale-110" />
                         <p className="relative z-10 text-xs font-bold text-indigo-200 uppercase tracking-widest">Premium Plan</p>
@@ -226,7 +223,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean, onClose?: () => 
                             Upgrade Now
                         </button>
                     </div>
-                </div>
+                </div> */}
             </div>
         </aside>
     );
