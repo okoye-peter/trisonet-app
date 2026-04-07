@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Footer() {
     return (
@@ -25,9 +26,9 @@ export default function Footer() {
                                 </div>
                                 <div className="grb__social footer-social">
                                     <ul>
-                                        <li><a href="https://web.facebook.com/profile.php?id=100084876782538&_rdc=1&_rdr"><i className="fab fa-facebook-f"></i></a></li>
-                                        <li><a href="https://www.youtube.com/@trisonetassetchannel"><i className="fab fa-youtube"></i></a></li>
-                                        <li><a href="https://www.instagram.com/trisonet_asset_channel/?hl=en"><i className="fab fa-instagram"></i></a></li>
+                                        <li><a href="https://web.facebook.com/profile.php?id=100084876782538&_rdc=1&_rdr" target="_blank" rel="noopener noreferrer"><i className="fab fa-facebook-f"></i></a></li>
+                                        <li><a href="https://www.youtube.com/@trisonetassetchannel" target="_blank" rel="noopener noreferrer"><i className="fab fa-youtube"></i></a></li>
+                                        <li><a href="https://www.instagram.com/trisonet_asset_channel/?hl=en" target="_blank" rel="noopener noreferrer"><i className="fab fa-instagram"></i></a></li>
                                     </ul>
                                 </div>
                             </div>
@@ -50,13 +51,13 @@ export default function Footer() {
                         <div className="col-lg-3 col-md-6">
                             <div className="footer-widget mb-40">
                                 <div className="footer-widget-title">
-                                    <h4>Quick Links</h4>
+                                    <h4>About Us</h4>
                                 </div>
                                 <ul className="footer-list">
                                     <li><Link href="/about">About Us</Link></li>
                                     <li><Link href="/contact">Contact Us</Link></li>
-                                    <li><Link href="/policy">Privacy Policy</Link></li>
                                     <li><Link href="/terms">Terms & Conditions</Link></li>
+                                    <li><Link href="/policy">Privacy Policy</Link></li>
                                 </ul>
                             </div>
                         </div>
@@ -82,19 +83,18 @@ export default function Footer() {
                         <div className="col-lg-3 d-none d-lg-block">
                             <div className="copyright-logo logo-shape">
                                 <Link href="/">
-                                    <img src="/assets/img/logo/logo-white.png" alt="" />
+                                    <Image src="/assets/img/logo/logo-white.png" alt="Trisonet Logo" width={60} height={60} />
                                 </Link>
                             </div>
                         </div>
                         <div className="col-lg-4 col-md-6">
                             <div className="copyright-text">
-                                <p>Copyrighted by <a href="#">Trisonet</a> | All Rights Reserved</p>
+                                <p>Copyright © {new Date().getFullYear()} <a href="#">Trisonet</a> | All Rights Reserved</p>
                             </div>
                         </div>
                         <div className="col-lg-5 col-md-6">
                             <ul className="copyright-list f-right">
                                 <li><Link href="/terms">Terms & Conditions</Link></li>
-                                <li><Link href="/policy">Privacy Policy</Link></li>
                                 <li><Link href="/about">About Us</Link></li>
                             </ul>
                         </div>
@@ -104,3 +104,5 @@ export default function Footer() {
         </footer>
     );
 }
+
+

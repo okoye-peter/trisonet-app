@@ -1,104 +1,22 @@
-'use client';
+import type { Metadata } from 'next';
+import Image from 'next/image';
+import Link from 'next/link';
+import HeroSlider from '@/components/landing/HeroSlider';
+import PortfolioSlider from '@/components/landing/PortfolioSlider';
+import TestimonialSlider from '@/components/landing/TestimonialSlider';
+import NewsletterForm from '@/components/landing/NewsletterForm';
+
+export const metadata: Metadata = {
+    title: 'Home | Trisonet - Leading Digital Asset Community',
+    description: 'Trisonet is a global social connection in a 3D virtual world, empowering partners with digital ownership and innovative virtual experiences.',
+    keywords: ['Digital Assets', 'Metaverse', 'Virtual Community', 'Trisonet', 'Blockchain'],
+};
 
 export default function Home() {
     return (
-        <>
+        <main>
             {/* hero area start here */}
-            <section className="slider-area p-relative fix">
-                <div className="slider-active swiper-container">
-                    <div className="swiper-wrapper">
-                        <div className="single-slider slider-height swiper-slide slider-overlay" data-swiper-autoplay="5000">
-                            <div className="slide-bg" data-background="/assets/img/bann.jpg"></div>
-                            <div className="container">
-                                <div className="row">
-                                    <div className="col-lg-9">
-                                        <div className="hero-content">
-                                            <div className="hero-bg-shape" data-animation="fadeInUp" data-delay=".3s">
-                                                <div className="hero-s-1">
-                                                    <img src="/assets/img/shape/hero-s-1.png" alt="" />
-                                                </div>
-                                                <div className="hero-s-2">
-                                                    <img src="/assets/img/shape/hero-s-2.png" alt="" />
-                                                </div>
-                                            </div>
-                                            <p data-animation="fadeInUp" data-delay=".6s">Digital Assets</p>
-                                            <h1 data-animation="fadeInUp" data-delay=".9s">Commited to Building</h1>
-                                            <div className="hero-content-btn" data-animation="fadeInUp" data-delay="1.1s">
-                                                <a href="/contact" className="grb-btn">Get Started</a>
-                                            </div>
-                                            <div className="hero-video-btn" data-animation="fadeInUp" data-delay="1.2s">
-                                                <a className="grb-video" href="https://www.youtube.com/watch?v=MQAU53mLeDU"><i className="fas fa-play"></i></a>
-                                                <p>Watch a Videos</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="single-slider slider-height swiper-slide slider-overlay" data-swiper-autoplay="5000">
-                            <div className="slide-bg" data-background="/assets/img/ban.jpg"></div>
-                            <div className="container">
-                                <div className="row">
-                                    <div className="col-lg-9">
-                                        <div className="hero-content">
-                                            <div className="hero-bg-shape" data-animation="fadeInUp" data-delay=".3s">
-                                                <div className="hero-s-1">
-                                                    <img src="/assets/img/shape/hero-s-1.png" alt="" />
-                                                </div>
-                                                <div className="hero-s-2">
-                                                    <img src="/assets/img/shape/hero-s-2.png" alt="" />
-                                                </div>
-                                            </div>
-                                            <p data-animation="fadeInUp" data-delay=".6s">Digital Assets</p>
-                                            <h1 data-animation="fadeInUp" data-delay=".9s">Accessing the Globe</h1>
-                                            <div className="hero-content-btn" data-animation="fadeInUp" data-delay="1.1s">
-                                                <a href="/contact" className="grb-btn">Get Started</a>
-                                            </div>
-                                            <div className="hero-video-btn" data-animation="fadeInUp" data-delay="1.2s">
-                                                <a className="grb-video" href="https://www.youtube.com/watch?v=MQAU53mLeDU"><i className="fas fa-play"></i></a>
-                                                <p>Watch a Videos</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="single-slider slider-height swiper-slide slider-overlay" data-swiper-autoplay="5000">
-                            <div className="slide-bg" data-background="/assets/img/b.jpg"></div>
-                            <div className="container">
-                                <div className="row">
-                                    <div className="col-lg-9">
-                                        <div className="hero-content">
-                                            <div className="hero-bg-shape" data-animation="fadeInUp" data-delay=".3s">
-                                                <div className="hero-s-1">
-                                                    <img src="/assets/img/shape/hero-s-1.png" alt="" />
-                                                </div>
-                                                <div className="hero-s-2">
-                                                    <img src="/assets/img/shape/hero-s-2.png" alt="" />
-                                                </div>
-                                            </div>
-                                            <p data-animation="fadeInUp" data-delay=".6s">Digital Assets</p>
-                                            <h1 data-animation="fadeInUp" data-delay=".9s">A Sustainable Economy</h1>
-                                            <div className="hero-content-btn" data-animation="fadeInUp" data-delay="1.1s">
-                                                <a href="/contact" className="grb-btn">Get Started</a>
-                                            </div>
-                                            <div className="hero-video-btn" data-animation="fadeInUp" data-delay="1.2s">
-                                                <a className="grb-video" href="https://www.youtube.com/watch?v=MQAU53mLeDU"><i className="fas fa-play"></i></a>
-                                                <p>Watch a Videos</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {/* If we need navigation buttons */}
-                    <div className="slider-nav">
-                        <div className="swiper-button-prev"><i className="far fa-arrow-left"></i></div>
-                        <div className="swiper-button-next"><i className="far fa-arrow-right"></i></div>
-                    </div>
-                </div>
-            </section>
+            <HeroSlider />
             {/* hero area end here */}
 
             {/* about area start  */}
@@ -108,16 +26,16 @@ export default function Home() {
                         <div className="col-xl-6 col-lg-5">
                             <div className="about__img p-relative mb-30">
                                 <div className="about__img-inner">
-                                    <img src="/assets/img/about/about1.jpg" alt="" />
+                                    <Image src="/assets/img/about/about1.jpg" alt="About Trisonet" width={600} height={450} className="w-full h-auto" />
                                 </div>
                                 <div className="p-element">
                                     <div className="ab-border d-none d-lg-block"></div>
                                     <div className="award">
-                                        <img src="/assets/img/icon/batch.png" alt="" />
+                                        <Image src="/assets/img/icon/batch.png" alt="Award badge" width={80} height={80} />
                                         <p>Won the Digital Awards</p>
                                     </div>
                                     <div className="ab-image">
-                                        <img src="/assets/img/about/abp-img.png" alt="" />
+                                        <Image src="/assets/img/about/abp-img.png" alt="About detail" width={250} height={180} />
                                     </div>
                                 </div>
                             </div>
@@ -152,7 +70,7 @@ export default function Home() {
                                     </li>
                                 </ul>
                                 <div className="about__btn st-1">
-                                    <a href="/services" className="grb-btn st-1">Read More<i className="fas fa-arrow-right"></i></a>
+                                    <Link href="/services" className="grb-btn st-1">Read More<i className="fas fa-arrow-right"></i></Link>
                                 </div>
                             </div>
                         </div>
@@ -166,8 +84,8 @@ export default function Home() {
                 <div className="container">
                     <div className="row wow fadeInUp">
                         <div className="col-lg-6">
-                            <div className="choosing__img mb-30">
-                                <img src="/assets/img/about/p.jpg" alt="" />
+                            <div className="choosing__img mb-30 p-relative">
+                                <Image src="/assets/img/about/p.jpg" alt="Choosing us" width={600} height={400} className="w-full h-auto" />
                                 <div className="subscribe">
                                     <a href="#"><i className="fab fa-youtube"></i></a>
                                     <div className="subscribe__text">
@@ -222,8 +140,9 @@ export default function Home() {
             {/* choosing area end  */}
 
             {/* counter area start  */}
-            <section className="counter__area pt-110 pb-90" data-background="/assets/img/ban.jpg">
-                <div className="container">
+            <section className="counter__area pt-110 pb-90 p-relative fix bg-stone-900">
+                {/* Background image removed as it is missing from assets */}
+                <div className="container p-relative z-10">
                     <div className="row wow fadeInUp align-items-center counter-head">
                         <div className="col-lg-9 col-md-8">
                             <div className="counter-left">
@@ -234,9 +153,9 @@ export default function Home() {
                         </div>
                         <div className="col-lg-3 col-md-4">
                             <div className="counter-right mb-30">
-                                <a href="/contact" className="grb-border-btn">
+                                <Link href="/contact" className="grb-border-btn">
                                     Contact Us
-                                </a>
+                                </Link>
                             </div>
                         </div>
                     </div>
@@ -292,9 +211,9 @@ export default function Home() {
                                     <div className="counter-content-right text-end mb-30">
                                         <div className="counter-right-img">
                                             <div className="dot-dot">
-                                                <img src="/assets/img/shape/dot-dot.png" alt="" />
+                                                <Image src="/assets/img/shape/dot-dot.png" alt="" width={50} height={50} />
                                             </div>
-                                            <img src="/assets/img/bg/child2.jpg" alt="" />
+                                            <Image src="/assets/img/bg/child2.jpg" alt="Child education" width={500} height={400} />
                                             <div className="experience-text">
                                                 <p><span>5+</span>Years Experiences</p>
                                             </div>
@@ -308,6 +227,14 @@ export default function Home() {
             </section>
             {/* counter area end */}
 
+            {/* testimonial area start  */}
+            <TestimonialSlider />
+            {/* testimonial area end */}
+
+            {/* portfolio area start */}
+            <PortfolioSlider />
+            {/* portfolio area end */}
+
             {/* newsletter area start  */}
             <div className="newsletter-area">
                 <div className="container">
@@ -319,15 +246,12 @@ export default function Home() {
                             </div>
                         </div>
                         <div className="col-lg-6">
-                            <form className="subscribe-form mb-30" onSubmit={(e) => e.preventDefault()}>
-                                <input type="text" placeholder="Enter your email..." />
-                                <button type="submit"><i className="fas fa-paper-plane"></i>Subscribe</button>
-                            </form>
+                            <NewsletterForm />
                         </div>
                     </div>
                 </div>
             </div>
             {/* newsletter area end */}
-        </>
+        </main>
     );
 }

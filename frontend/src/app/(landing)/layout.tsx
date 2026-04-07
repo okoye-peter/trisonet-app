@@ -1,9 +1,19 @@
-'use client';
-
 import Script from 'next/script';
 import Header from '@/components/landing/Header';
 import Footer from '@/components/landing/Footer';
 import MobileMenu from '@/components/landing/MobileMenu';
+
+// CSS Imports
+import '@/assets/css/bootstrap.min.css';
+import '@/assets/css/swiper-bundle.css';
+import '@/assets/css/animate.min.css';
+import '@/assets/css/custom-animation.css';
+import '@/assets/css/magnific-popup.css';
+import '@/assets/css/odometer-theme-default.css';
+import '@/assets/css/fontawesome-all.min.css';
+import '@/assets/css/meanmenu.css';
+import '@/assets/css/flaticon.css';
+import '@/assets/css/main.css';
 
 export default function LandingLayout({
     children,
@@ -12,17 +22,10 @@ export default function LandingLayout({
 }) {
     return (
         <div className="landing-page-wrapper">
-            {/* CSS Imports */}
-            <link rel="stylesheet" href="/assets/css/bootstrap.min.css" />
-            <link rel="stylesheet" href="/assets/css/swiper-bundle.css" />
-            <link rel="stylesheet" href="/assets/css/animate.min.css" />
-            <link rel="stylesheet" href="/assets/css/custom-animation.css" />
-            <link rel="stylesheet" href="/assets/css/magnific-popup.css" />
-            <link rel="stylesheet" href="/assets/css/odometer-theme-default.css" />
-            <link rel="stylesheet" href="/assets/css/fontawesome-all.min.css" />
-            <link rel="stylesheet" href="/assets/css/meanmenu.css" />
-            <link rel="stylesheet" href="/assets/css/flaticon.css" />
-            <link rel="stylesheet" href="/assets/css/main.css" />
+            
+            {/* Core jQuery and Bootstrap for Landing */}
+            <Script src="/assets/js/vendor/jquery-3.6.0.min.js" strategy="beforeInteractive" />
+            <Script src="/assets/js/bootstrap.bundle.min.js" strategy="beforeInteractive" />
 
             <div id="preloader" style={{ display: 'none' }}>
                 <div className="preloader">
@@ -40,7 +43,7 @@ export default function LandingLayout({
             
             <Footer />
 
-            {/* JS Imports - Core jQuery and Bootstrap moved to RootLayout */}
+            {/* Other JS Imports */}
             <Script src="/assets/js/swiper-bundle.js" strategy="afterInteractive" />
             <Script src="/assets/js/isotope.pkgd.min.js" strategy="afterInteractive" />
             <Script src="/assets/js/jquery.meanmenu.min.js" strategy="afterInteractive" />

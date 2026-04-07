@@ -1,11 +1,28 @@
-'use client';
+import type { Metadata } from 'next';
+import Image from 'next/image';
+import Link from 'next/link';
+import NewsletterForm from '@/components/landing/NewsletterForm';
+
+export const metadata: Metadata = {
+    title: 'Patron Plans | Trisonet - Leading Digital Asset Community',
+    description: 'Explore Trisonet Patron pricing plans. Become a Patron today and earn based on your investment plan.',
+    keywords: ['Patron Plans', 'Investment', 'Trisonet Patron', 'Financial Support'],
+};
 
 export default function PatronPage() {
     return (
         <>
             {/* page title area start  */}
-            <section className="page-title-area" data-background="/assets/img/bg/counter-right-img.png">
-                <div className="container">
+            <section className="page-title-area p-relative overflow-hidden">
+                <Image
+                    src="/assets/img/bg/counter-right-img.png"
+                    alt="Page title background"
+                    fill
+                    className="object-cover"
+                    priority
+                    sizes="100vw"
+                />
+                <div className="container p-relative z-10">
                     <div className="row">
                         <div className="col-lg-12">
                             <div className="page-title-content text-center">
@@ -14,7 +31,7 @@ export default function PatronPage() {
                                 </div>
                                 <nav className="grb-breadcrumb">
                                     <ol className="breadcrumb">
-                                        <li className="breadcrumb-item"><a href="/">Home</a></li>
+                                        <li className="breadcrumb-item"><Link href="/">Home</Link></li>
                                         <li className="breadcrumb-item active" aria-current="page">Patron Pricing Plans</li>
                                     </ol>
                                 </nav>
@@ -55,12 +72,12 @@ export default function PatronPage() {
                                                     <span>&#x20A6;1m - &#x20A6;9m</span>
                                                 </div>
                                                 <ul className="pricing-list">
-                                                    <li>Beneffit 40%</li>
+                                                    <li>Benefit 40%</li>
                                                 </ul>
                                                 <div className="pricing-btn text-center">
-                                                    <a href="/contact" className="grb-border-btn st-1">
+                                                    <Link href="/contact" className="grb-border-btn st-1">
                                                         Choose Plan
-                                                    </a>
+                                                    </Link>
                                                 </div>
                                             </div>
                                         </div>
@@ -74,9 +91,9 @@ export default function PatronPage() {
                                                     <li>Benefits 45%</li>
                                                 </ul>
                                                 <div className="pricing-btn text-center">
-                                                    <a href="/contact" className="grb-border-btn st-1">
+                                                    <Link href="/contact" className="grb-border-btn st-1">
                                                         Choose Plan
-                                                    </a>
+                                                    </Link>
                                                 </div>
                                             </div>
                                         </div>
@@ -90,9 +107,9 @@ export default function PatronPage() {
                                                     <li>Benefits 50%</li>
                                                 </ul>
                                                 <div className="pricing-btn text-center">
-                                                    <a href="/contact" className="grb-border-btn st-1">
+                                                    <Link href="/contact" className="grb-border-btn st-1">
                                                         Choose Plan
-                                                    </a>
+                                                    </Link>
                                                 </div>
                                             </div>
                                         </div>
@@ -110,9 +127,9 @@ export default function PatronPage() {
                                                     <li>Benefits 60%</li>
                                                 </ul>
                                                 <div className="pricing-btn text-center">
-                                                    <a href="/contact" className="grb-border-btn st-1">
+                                                    <Link href="/contact" className="grb-border-btn st-1">
                                                         Choose Plan
-                                                    </a>
+                                                    </Link>
                                                 </div>
                                             </div>
                                         </div>
@@ -126,9 +143,9 @@ export default function PatronPage() {
                                                     <li>Benefits 70%</li>
                                                 </ul>
                                                 <div className="pricing-btn text-center">
-                                                    <a href="/contact" className="grb-border-btn st-1">
+                                                    <Link href="/contact" className="grb-border-btn st-1">
                                                         Choose Plan
-                                                    </a>
+                                                    </Link>
                                                 </div>
                                             </div>
                                         </div>
@@ -140,6 +157,24 @@ export default function PatronPage() {
                 </div>
             </section>
             {/* pricing area end */}
+
+            {/* newsletter area start  */}
+            <div className="newsletter-area">
+                <div className="container">
+                    <div className="row wow fadeInUp align-items-center">
+                        <div className="col-lg-6">
+                            <div className="newsletter-text mb-30">
+                                <h4>Subscribe For Newsletter</h4>
+                                <p>Get insights on technology trends, product updates, and what&apos;s next — straight to your inbox.</p>
+                            </div>
+                        </div>
+                        <div className="col-lg-6">
+                            <NewsletterForm />
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {/* newsletter area end */}
         </>
     );
 }
