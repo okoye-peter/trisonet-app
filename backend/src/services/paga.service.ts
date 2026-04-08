@@ -249,6 +249,7 @@ export class PagaService {
      * Resolve bank account details
      */
     async resolveBankDetails(bankUUID: string, accountNumber: string, bankCode?: string): Promise<PagaResponse> {
+        pagaLogger.info('detail', { bankUUID, accountNumber, bankCode })
         if (bankCode && !bankUUID) {
             const bank = await this.getBankByCode(bankCode);
 
@@ -261,7 +262,7 @@ export class PagaService {
                 };
             }
 
-            bankUUID = bank.uuid;
+            bankUUID = bank.uuid || bank.bankUUID || bank.uuid;
         }
 
         const data = {

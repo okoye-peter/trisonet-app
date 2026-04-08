@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { asyncHandler } from "../middlewares/asyncHandler";
 import { PagaService } from "../services/paga.service";
 import { sendSuccess } from "../utils/responseWrapper";
+import { logger } from "../utils/logger";
 
 export const getBanksList = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const result = await (new PagaService()).getBanks();
@@ -66,7 +67,8 @@ export const getUserBankDetails = asyncHandler(async (req: Request, res: Respons
         return sendSuccess(res, 200, 'service currently not available', []);
     }
 
-    const acc = await paga.resolveBankDetailsByCode(result.bankCode, user.accountNumber);
+    
+    const acc = await paga.resolveBankDetails(result.uuid, user.accountNumber);
 
     if(!acc.success){
         return sendSuccess(res, 200, 'service currently not available', []);
