@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import LoadingScreen from '@/components/LoadingScreen';
-import { setAuthStatus, setUser } from '@/store/features/authSlice';
+import { setUser } from '@/store/features/authSlice';
 import { useGetUserQuery } from '@/store/api/userApi';
-
+import { store } from '@/store';
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
     const { isAuthenticated, token, isLoading: authLoading } = useAppSelector((state) => state.auth);
@@ -18,7 +18,6 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     const { data: userData, error: userError, isLoading: userQueryLoading } = useGetUserQuery(undefined, {
         skip: !token || !isAuthenticated,
     });
-
 
     useEffect(() => {
         if (userData?.data) {
@@ -38,20 +37,19 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
             router.push('/login');
         }
 
-        // Hydrate authentication status from token if available
-        if (token && !isAuthenticated) {
-            dispatch(setAuthStatus(true));
-        }
-
         const checkAuth = () => {
-            const storedToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+            // Read CURRENT state from store directly to avoid stale closure values.
+            // This is critical because initAuth() is dispatched in the parent (Providers)
+            // useEffect which runs synchronously BEFORE this child effect — so the Redux
+            // store already has the correct token by this point, but the component closure
+            // still reflects the pre-dispatch render snapshot.
+            const { isAuthenticated: currentAuth, token: currentToken } = store.getState().auth;
 
-            if (!storedToken && !isAuthenticated) {
+            if (!currentAuth && !currentToken) {
                 if (pathname !== '/login' && pathname !== '/register' && pathname !== '/forgot-password') {
                     router.push('/login');
                 }
             }
-
             setIsChecking(false);
         };
 
@@ -61,7 +59,6 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
     // Show loading screen while checking auth or during auth transitions
     if (isChecking || authLoading || userQueryLoading) {
-
         return <LoadingScreen message="Verifying session..." />;
     }
 
