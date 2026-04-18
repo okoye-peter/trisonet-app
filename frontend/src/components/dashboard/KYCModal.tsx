@@ -13,8 +13,8 @@ import Image from 'next/image';
 import api from '@/lib/axios';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { User } from 'lucide-react';
-import { logout } from '@/store/features/authSlice';
 import { useRouter } from 'next/navigation';
+import { useLogout } from '@/hooks/useLogout';
 
 interface KYCModalProps {
     isOpen: boolean;
@@ -44,6 +44,13 @@ export default function KYCModal({ isOpen, onClose, onSuccess, isMandatory = fal
         const timer = setTimeout(() => setMounted(true), 0);
         return () => clearTimeout(timer);
     }, []);
+
+    // Sync name when user is loaded (after reload)
+    useEffect(() => {
+        if (user?.name && !name) {
+            setName(user.name);
+        }
+    }, [user?.name, name]);
 
     const videoConstraints = {
         width: 1280,
@@ -145,9 +152,10 @@ export default function KYCModal({ isOpen, onClose, onSuccess, isMandatory = fal
         onClose();
     };
 
+    const logout = useLogout();
+
     const handleLogout = () => {
-        dispatch(logout());
-        router.replace('/login');
+        logout();
     }
 
     if (!mounted) return null;
@@ -189,7 +197,7 @@ export default function KYCModal({ isOpen, onClose, onSuccess, isMandatory = fal
                                     </div>
                                     <div>
                                         <h3 className="text-2xl font-black tracking-tight text-zinc-900 leading-tight">Identity Verification</h3>
-                                        <p className="text-sm font-bold text-zinc-400 uppercase tracking-widest mt-1">KYC Level 2</p>
+                                        <p className="text-sm font-bold text-zinc-400 uppercase tracking-widest mt-1">KYC Level 1</p>
                                     </div>
                                 </div>
                             </div>
