@@ -7,7 +7,7 @@ import { PREMBLY } from "../config/constants";
 import { kycLogger } from "../utils/logger";
 import { prisma } from "../config/prisma";
 import { deleteCloudinaryFileByUrl } from "../utils/cloudinaryHelper";
-import { encryptText } from "../utils/crypto";
+import { encryptText, decryptEncryptedText, hashString } from "../utils/crypto";
 
 /**
  * Helper to clean up Cloudinary assets and log errors if any
@@ -83,11 +83,25 @@ export const uploadKyc = asyncHandler(async (req: Request, res: Response, next: 
 
         // Verify if names match the user's registered name
         if (verifyNameMatch(name || '', firstName, lastName)) {
+            // Check if BVN is already used by another user
+            const bvnHash = hashString(bvn);
+            const existingBvnUser = await prisma.user.findFirst({
+                where: { 
+                    bvnHash,
+                    id: { not: user.id }
+                }
+            });
+
+            if (existingBvnUser) {
+                cleanupCloudinary(image_one_url);
+                return next(new AppError('This BVN is already used by another verified user.', 400));
+            }
             await prisma.user.update({
                 where: { id: user.id },
                 data: { 
                     hasVerifiedLevel2: true,
                     bvn: encryptText(bvn),
+                    bvnHash,
                     name
                 }
             });
@@ -120,3 +134,22 @@ export const uploadKyc = asyncHandler(async (req: Request, res: Response, next: 
         return next(new AppError(errorMessage, 500));
     }
 });
+
+export const updateUserBvnHash = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const users = await prisma.user.findMany({
+        where: {
+            bvn: {
+                not: null
+            },
+            bvnHash: null
+        }
+    });
+    for (const user of users) {
+        const bvnHash = hashString(decryptEncryptedText(user.bvn as string));
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { bvnHash }
+        });
+    }
+    return sendSuccess(res, 200, "BVN hashes updated successfully.");
+})
