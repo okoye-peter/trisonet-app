@@ -14,13 +14,15 @@ export interface PimCard {
     createdAt: string;
     updatedAt: string;
     _count?: {
-        transactions: number;
+        usersWithCard: number;
     };
 }
 
 export interface PimCardsSummary {
     totalCards: number;
     availableSlots: number;
+    usedSlots: number;
+    totalSlots: number;
     pendingCards: number;
     price: number;
     activeCard: {
