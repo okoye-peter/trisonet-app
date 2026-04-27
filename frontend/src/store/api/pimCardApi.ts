@@ -13,6 +13,9 @@ export interface PimCard {
     approvedBy: string | null;
     createdAt: string;
     updatedAt: string;
+    _count?: {
+        transactions: number;
+    };
 }
 
 export interface PimCardsSummary {
@@ -26,6 +29,7 @@ export interface PimCardsSummary {
         amount: number;
         pricePerUser: number;
         createdAt: string;
+        slots: number;
     } | null;
     status: {
         PENDING: number;
